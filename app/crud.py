@@ -41,3 +41,44 @@ def create_order(db: Session, order: schemas.LimitOrderBody | schemas.MarketOrde
     db.commit()
     db.refresh(db_order)
     return db_order
+
+def execute_trade(db: Session, buy_order: models.Order, sell_order: models.Order, 
+                 qty: int, ticker: str):
+    # Обновляем балансы
+    # Покупатель получает акции, теряет деньги
+    update_balance(db, buy_order.user_id, ticker, qty)
+    update_balance(db, buy_order.user_id, "RUB", -qty * sell_order.price)
+    
+    # Продавец получает деньги, теряет акции
+    update_balance(db, sell_order.user_id, ticker, -qty)
+    update_balance(db, sell_order.user_id, "RUB", qty * sell_order.price)
+    
+    # Создаем запись о сделке
+    trade = models.Trade(
+        buy_order_id=buy_order.id,
+        sell_order_id=sell_order.id,
+        ticker=ticker,
+        qty=qty,
+        price=sell_order.price,
+        executed_at=datetime.now()
+    )
+    db.add(trade)
+
+def update_balance(db: Session, user_id: str, ticker: str, amount: int):
+    balance = db.query(models.Balance).filter(
+        models.Balance.user_id == user_id,
+        models.Balance.ticker == ticker
+    ).first()
+    
+    if balance:
+        balance.amount += amount
+    else:
+        balance = models.Balance(
+            user_id=user_id,
+            ticker=ticker,
+            amount=amount
+        )
+        db.add(balance)
+    
+    if balance.amount < 0:
+        raise ValueError("Negative balance not allowed")

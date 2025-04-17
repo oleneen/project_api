@@ -36,3 +36,15 @@ class Order(Base):
     created_at = Column(DateTime, server_default=func.now())
     filled = Column(Integer, default=0)
     user = relationship("User")
+
+class Trade(Base):
+    __tablename__ = "trades"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    buy_order_id = Column(String, ForeignKey("orders.id"))
+    sell_order_id = Column(String, ForeignKey("orders.id"))
+    ticker = Column(String)
+    qty = Column(Integer)
+    price = Column(Integer)
+    executed_at = Column(DateTime, server_default=func.now())
+    buy_order = relationship("Order", foreign_keys=[buy_order_id])
+    sell_order = relationship("Order", foreign_keys=[sell_order_id])

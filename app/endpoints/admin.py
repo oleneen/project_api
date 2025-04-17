@@ -55,3 +55,16 @@ def list_orders(
 ):
     """Список активных заявок пользователя"""
     return crud.get_user_orders(db, current_user.id)
+
+@router.delete("/instrument/{ticker}")
+def delist_instrument(ticker: str, db: Session = Depends(get_db)):
+    return crud.delete_instrument(db, ticker)
+
+@router.post("/balance/withdraw")
+def withdraw_balance(operation: BalanceOperation, db: Session = Depends(get_db)):
+    return crud.withdraw_user_balance(
+        db, 
+        user_id=operation.user_id,
+        ticker=operation.ticker,
+        amount=operation.amount
+    )

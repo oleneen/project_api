@@ -2,8 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from .. import schemas, models, crud
 from ..database import get_db
-from typing import Optional
-import uuid
 
 router = APIRouter(prefix="/api/v1")
 from ..schemas import BalanceOperation

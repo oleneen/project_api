@@ -1,1 +1,7 @@
 venv
+*.json
+.env
+.DS_Store
+.mypy_cache/
+_pycache__/
+*.py[cod]

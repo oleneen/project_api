@@ -41,3 +41,15 @@ def list_orders(
 ):
     """Список активных заявок пользователя"""
     return crud.get_user_orders(db, current_user.id)
+
+@router.get("/order/{order_id}", response_model=schemas.OrderResponse)
+def get_order(
+    order_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Получение информации о конкретном ордере"""
+    order = crud.get_order_by_id(db, order_id, current_user.id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return order

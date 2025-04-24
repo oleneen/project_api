@@ -5,7 +5,6 @@ from ..database import get_db
 
 # Создаем роутер для API с префиксом /api/v1
 router = APIRouter(prefix="/api/v1")
-from ..schemas import BalanceOperation
 
 # Эндпоинт для добавления нового инструмента
 @router.post("/instrument")
@@ -209,3 +208,50 @@ def delist_instrument(
     db.commit()  # Фиксируем изменения
     
     return {"status": "ok", "message": f"Инструмент {ticker} удален"}
+
+@router.post("/balance/withdraw", response_model=schemas.Ok)
+def withdraw_balance(
+        operation: schemas.WithdrawRequest,
+        current_user: models.User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+    """
+    Списание средств с баланса пользователя.
+    Только для администраторов.
+
+    Параметры:
+    - user_id: UUID пользователя
+    - ticker: Тикер инструмента
+    - amount: Сумма списания (должна быть > 0)
+
+    Возвращает:
+    - {"success": true} при успешном списании
+
+    Исключения:
+    - 403: Нет прав администратора
+    - 400: Недостаточно средств или баланс не найден
+    """
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Требуются права администратора")
+
+    try:
+        # Проверяем существование баланса
+        balance = db.query(models.Balance).filter(
+            models.Balance.user_id == operation.user_id,
+            models.Balance.ticker == operation.ticker
+        ).first()
+
+        if not balance:
+            raise HTTPException(status_code=400, detail="Balance not found")
+
+        if balance.amount < operation.amount:
+            raise HTTPException(status_code=400, detail=f"Недостаточно средств. Текущий баланс: {balance.amount}")
+
+        # Списание средств
+        balance.amount -= operation.amount
+        db.commit()
+        return {"success": True}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))

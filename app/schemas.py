@@ -52,3 +52,28 @@ class MarketOrderBody(BaseModel):
 class StatusResponse(BaseModel):
     status: str
     message: Optional[str] = None
+
+# Схемы для операций с балансом
+class DepositRequest(BaseModel):
+    """Запрос на пополнение баланса"""
+    user_id: UUID4
+    ticker: str
+    amount: conint(gt=0)  # Положительное число
+
+class WithdrawRequest(BaseModel):
+    """Запрос на списание средств"""
+    user_id: UUID4
+    ticker: str
+    amount: conint(gt=0)  # Положительное число
+
+class UpdateBalanceRequest(BaseModel):
+    user_id: int  # ID пользователя, чей баланс нужно обновить
+    operation: str  # Тип операции: "deposit" для пополнения или "withdraw" для списания
+    amount: Decimal  # Сумма, на которую нужно изменить баланс
+
+    class Config:
+        orm_mode = True
+
+class Ok(BaseModel):
+    message: str
+    success: bool

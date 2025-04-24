@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 venv/
 .env
 __pycache__/
@@ -6,3 +7,12 @@ __pycache__/
 *.pyd
 *.sqlite
 *.db
+=======
+venv
+*.json
+.env
+.DS_Store
+.mypy_cache/
+_pycache__/
+*.py[cod]
+>>>>>>> f2bd57f5aa4260504f989634c522b81857941e6d

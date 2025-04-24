@@ -42,9 +42,28 @@ def create_order(db: Session, order: schemas.LimitOrderBody | schemas.MarketOrde
     db.refresh(db_order)
     return db_order
 
+<<<<<<< HEAD
 def get_order_by_id(db: Session, order_id: str, user_id: str = None):
     query = db.query(models.Order).filter(models.Order.id == order_id)
     #проверяем принадлежит ли ордер пользователю - опционально, можно не проверять
     if user_id:
         query = query.filter(models.Order.user_id == user_id)
     return query.first()
+=======
+
+def withdraw_balance(db: Session, user_id: str, ticker: str, amount: int):
+    balance = db.query(models.Balance).filter(
+        models.Balance.user_id == user_id,
+        models.Balance.ticker == ticker
+    ).first()
+
+    if not balance:
+        raise ValueError("Balance not found")
+
+    if balance.amount < amount:
+        raise ValueError("Insufficient funds")
+
+    balance.amount -= amount
+    db.commit()
+    return balance
+>>>>>>> f2bd57f5aa4260504f989634c522b81857941e6d

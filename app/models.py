@@ -3,13 +3,17 @@ from sqlalchemy.sql import func  # Добавьте эту строку
 from sqlalchemy.orm import relationship
 from .database import Base
 import uuid
+from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String)
-    api_key = Column(String, unique=True)
-    role = Column(String, default="USER")
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False)
+    api_key = Column(String(100), unique=True, nullable=False)
+    role = Column(String(10), nullable=False, server_default=text("USER"))
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
 
 class Instrument(Base):
     __tablename__ = "instruments"

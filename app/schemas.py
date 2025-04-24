@@ -1,6 +1,8 @@
-from pydantic import BaseModel, UUID4
+from pydantic import BaseModel, UUID4, conint
 from typing import Optional, List
 from enum import Enum
+from datetime import datetime
+from decimal import Decimal
 
 class Direction(str, Enum):
     BUY = "BUY"
@@ -10,6 +12,10 @@ class OrderStatus(str, Enum):
     NEW = "NEW"
     EXECUTED = "EXECUTED"
     CANCELLED = "CANCELLED"
+
+class UserRole(str, Enum):
+    USER = "USER"
+    ADMIN = "ADMIN"
 
 class Balance(BaseModel):
     ticker: str
@@ -31,8 +37,8 @@ class NewUser(BaseModel):
 class User(BaseModel):
     id: UUID4
     name: str
+    role: UserRole
     api_key: str
-    role: str
 
 class Instrument(BaseModel):
     name: str

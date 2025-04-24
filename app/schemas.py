@@ -48,3 +48,7 @@ class MarketOrderBody(BaseModel):
     direction: str
     ticker: str
     qty: int
+    
+class StatusResponse(BaseModel):
+    status: str
+    message: Optional[str] = None

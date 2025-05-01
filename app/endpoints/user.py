@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from .. import schemas, models, crud
 from ..database import get_db
 from typing import Optional
@@ -8,7 +8,7 @@ import uuid
 router = APIRouter(prefix="/api/v1")
 
 # Пример защиты эндпоинта
-def get_current_user(authorization: str = Header(...), db: Session = Depends(get_db)):
+def get_current_user(authorization: str = Header(...), db: AsyncSession = Depends(get_db)):
     if not authorization.startswith("TOKEN "):
         raise HTTPException(status_code=401, detail="Invalid token format")
     token = authorization[6:]
@@ -20,7 +20,7 @@ def get_current_user(authorization: str = Header(...), db: Session = Depends(get
 @router.get("/balance")
 def get_balances(
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Получение балансов пользователя"""
     return crud.get_user_balances(db, current_user.id)
@@ -29,7 +29,7 @@ def get_balances(
 def create_order(
     order_data: schemas.LimitOrderBody | schemas.MarketOrderBody,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Создание новой заявки"""
     return crud.create_order(db, current_user.id, order_data)
@@ -37,7 +37,7 @@ def create_order(
 @router.get("/order")
 def list_orders(
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Список активных заявок пользователя"""
     return crud.get_user_orders(db, current_user.id)
@@ -46,7 +46,7 @@ def list_orders(
 def get_order(
     order_id: str,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Получение информации о конкретном ордере"""
     order = crud.get_order_by_id(db, order_id, current_user.id)

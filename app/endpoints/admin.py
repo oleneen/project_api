@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from .. import schemas, models, crud
 from ..database import get_db
 
@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/v1")
 
 # Эндпоинт для добавления нового инструмента
 @router.post("/instrument")
-def add_instrument(instrument: schemas.Instrument, db: Session = Depends(get_db)):
+def add_instrument(instrument: schemas.Instrument, db: AsyncSession = Depends(get_db)):
     """
     Добавляет новый торговый инструмент в систему.
     Требует прав администратора (проверяется в get_current_user).
@@ -24,7 +24,7 @@ def add_instrument(instrument: schemas.Instrument, db: Session = Depends(get_db)
 
 # Эндпоинт для пополнения баланса пользователя
 @router.post("/balance/deposit")
-def deposit_balance(operation: BalanceOperation, db: Session = Depends(get_db)):
+def deposit_balance(operation: BalanceOperation, db: AsyncSession = Depends(get_db)):
     """
     Пополняет баланс пользователя.
     Только для администраторов.
@@ -44,7 +44,7 @@ def deposit_balance(operation: BalanceOperation, db: Session = Depends(get_db)):
     )
 
 # Функция для проверки и получения текущего пользователя
-def get_current_user(authorization: str = Header(...), db: Session = Depends(get_db)):
+def get_current_user(authorization: str = Header(...), db: AsyncSession = Depends(get_db)):
     """
     Проверяет и извлекает пользователя по токену авторизации.
     
@@ -70,7 +70,7 @@ def get_current_user(authorization: str = Header(...), db: Session = Depends(get
 @router.get("/balance")
 def get_balances(
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Получает все балансы текущего пользователя.
@@ -89,7 +89,7 @@ def get_balances(
 def create_order(
     order_data: schemas.LimitOrderBody | schemas.MarketOrderBody,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Создает новый ордер (лимитный или рыночный).
@@ -108,7 +108,7 @@ def create_order(
 @router.get("/order")
 def list_orders(
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Получает список всех активных ордеров пользователя.
@@ -127,7 +127,7 @@ def list_orders(
 def delete_user(
     user_id: str,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Удаляет пользователя и все связанные данные.
@@ -170,7 +170,7 @@ def delete_user(
 def delist_instrument(
     ticker: str,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Удаляет инструмент из системы и отменяет все связанные ордера.
@@ -213,7 +213,7 @@ def delist_instrument(
 def withdraw_balance(
         operation: schemas.WithdrawRequest,
         current_user: models.User = Depends(get_current_user),
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
     """
     Списание средств с баланса пользователя.

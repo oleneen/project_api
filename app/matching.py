@@ -1,4 +1,3 @@
-from .database import SessionLocal
 from . import models
 from sqlalchemy import and_, or_
 

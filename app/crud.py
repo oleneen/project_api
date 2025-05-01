@@ -1,38 +1,38 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from . import models, schemas
 from datetime import datetime
 
-def get_user_by_token(db: Session, token: str):
+def get_user_by_token(db: AsyncSession, token: str):
     return db.query(models.User).filter(models.User.api_key == token).first()
 
-def create_order(db: Session, user_id: str, order_data):
+def create_order(db: AsyncSession, user_id: str, order_data):
     # Здесь должна быть логика создания ордера
     pass
 
-def get_user_balances(db: Session, user_id: str):
+def get_user_balances(db: AsyncSession, user_id: str):
     # Логика получения балансов
     pass
 
-def create_instrument(db: Session, instrument: schemas.Instrument):
+def create_instrument(db: AsyncSession, instrument: schemas.Instrument):
     db_instrument = models.Instrument(**instrument.dict())
     db.add(db_instrument)
     db.commit()
     db.refresh(db_instrument)
     return db_instrument
 
-def get_instruments(db: Session):
+def get_instruments(db: AsyncSession):
     return db.query(models.Instrument).all()
 
-def create_user_balance(db: Session, user_id: str, ticker: str, amount: int):
+def create_user_balance(db: AsyncSession, user_id: str, ticker: str, amount: int):
     balance = models.Balance(user_id=user_id, ticker=ticker, amount=amount)
     db.add(balance)
     db.commit()
     return balance
 
-def get_user_balances(db: Session, user_id: str):
+def get_user_balances(db: AsyncSession, user_id: str):
     return db.query(models.Balance).filter(models.Balance.user_id == user_id).all()
 
-def create_order(db: Session, order: schemas.LimitOrderBody | schemas.MarketOrderBody, user_id: str):
+def create_order(db: AsyncSession, order: schemas.LimitOrderBody | schemas.MarketOrderBody, user_id: str):
     db_order = models.Order(
         user_id=user_id,
         **order.dict()
@@ -42,14 +42,14 @@ def create_order(db: Session, order: schemas.LimitOrderBody | schemas.MarketOrde
     db.refresh(db_order)
     return db_order
 
-def get_order_by_id(db: Session, order_id: str, user_id: str = None):
+def get_order_by_id(db: AsyncSession, order_id: str, user_id: str = None):
     query = db.query(models.Order).filter(models.Order.id == order_id)
     #проверяем принадлежит ли ордер пользователю - опционально, можно не проверять
     if user_id:
         query = query.filter(models.Order.user_id == user_id)
     return query.first()
 
-def withdraw_balance(db: Session, user_id: str, ticker: str, amount: int):
+def withdraw_balance(db: AsyncSession, user_id: str, ticker: str, amount: int):
     balance = db.query(models.Balance).filter(
         models.Balance.user_id == user_id,
         models.Balance.ticker == ticker

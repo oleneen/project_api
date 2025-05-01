@@ -78,7 +78,7 @@ class UpdateBalanceRequest(BaseModel):
     amount: Decimal  # Сумма, на которую нужно изменить баланс
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Ok(BaseModel):
     success: bool = True

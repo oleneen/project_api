@@ -81,9 +81,7 @@ class UpdateBalanceRequest(BaseModel):
         orm_mode = True
 
 class Ok(BaseModel):
-    message: str
-    success: bool
-
+    success: bool = True
 class Level(BaseModel):
     price: int
     quantity: int

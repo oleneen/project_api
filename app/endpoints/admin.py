@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import AsyncSession
 from .. import schemas, models, crud
 from ..database import get_db
+from ..schemas import Ok 
 
 router = APIRouter()
 
@@ -32,6 +33,8 @@ async def add_instrument(
         raise HTTPException(status_code=400, detail="Инструмент уже существует")
     
     await crud.create_instrument(db, instrument)
+    
+    # Просто возвращаем объект Ok (FastAPI сам сериализует его в JSON)
     return {"success": True}
 # Эндпоинт для пополнения баланса пользователя
 # @router.post("/balance/deposit")

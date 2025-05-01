@@ -20,12 +20,12 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/register", response_model=UserSchema)
-async def register_user(request: NewUser, session: AsyncSession = Depends(get_db)):
+async def register_user(request: NewUser, AsyncSession: AsyncSession = Depends(get_db)):
     api_key = f"key-{uuid4()}"
     user = UserModel(name=request.name, api_key=api_key)
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
+    AsyncSession.add(user)
+    await AsyncSession.commit()
+    await AsyncSession.refresh(user)
     return user
 
 @router.get("/instrument", response_model=List[Instrument])

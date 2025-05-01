@@ -31,3 +31,8 @@ async def get_db():
 async def init_db_async():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+# Временно добавьте в database.py
+async def drop_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)

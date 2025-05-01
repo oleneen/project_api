@@ -1,28 +1,55 @@
 # /app/api/balance.py
-
-from fastapi import APIRouter, HTTPException
-from decimal import Decimal
-from ..schemas import UpdateBalanceRequest, Ok, User
+from fastapi import APIRouter, HTTPException, Depends, Header
+from typing import Optional, Dict
+from sqlalchemy.ext.asyncio import AsyncSession
+from ..database import get_db
+from .. import crud
 
 router = APIRouter()
-
-
-@router.post("/api/v1/balance/update", response_model=Ok)
-async def update_balance(data: UpdateBalanceRequest):
-    user = await get_user_by_id(data.user_id)  # Получаем пользователя по ID
-
+@router.get("/balance", response_model=Dict[str, int])
+async def get_balances(
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db)
+):
+    # Проверяем наличие токена авторизации
+    if not authorization or not authorization.startswith("TOKEN "):
+        raise HTTPException(status_code=401, detail="Authorization token is missing or invalid")
+    
+    api_key = authorization.split(" ")[1]
+    
+    # Получаем пользователя по токену
+    user = await crud.get_user_by_token(db, api_key)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Получаем балансы пользователя
+    balances = await crud.get_user_balances(db, str(user.id))
+    
+    # Если у пользователя нет балансов, возвращаем пустой словарь
+    if not balances:
+        return {}
+    
+    # Форматируем ответ в виде словаря {ticker: amount}
+    balance_dict = {ticker: amount for (ticker, amount) in balances}
+    
+    return balance_dict
 
-    if data.operation == "deposit":
-        user.balance += data.amount
-    elif data.operation == "withdraw":
-        if user.balance < data.amount:
-            raise HTTPException(status_code=400, detail="Insufficient funds")
-        user.balance -= data.amount
-    else:
-        raise HTTPException(status_code=400, detail="Invalid operation type")
+# @router.post("/api/v1/balance/update", response_model=Ok)
+# async def update_balance(data: UpdateBalanceRequest):
+#     user = await get_user_by_id(data.user_id)  # Получаем пользователя по ID
 
-    await update_user_balance(user)  # Обновляем баланс в базе данных
+#     if not user:
+#         raise HTTPException(status_code=404, detail="User not found")
 
-    return Ok(message="Balance updated successfully", success=True)
+#     if data.operation == "deposit":
+#         user.balance += data.amount
+#     elif data.operation == "withdraw":
+#         if user.balance < data.amount:
+#             raise HTTPException(status_code=400, detail="Insufficient funds")
+#         user.balance -= data.amount
+#     else:
+#         raise HTTPException(status_code=400, detail="Invalid operation type")
+
+#     await update_user_balance(user)  # Обновляем баланс в базе данных
+
+#     return Ok(message="Balance updated successfully", success=True)

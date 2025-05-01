@@ -30,13 +30,16 @@ class Balance(Base):
 
 class Order(Base):
     __tablename__ = "orders"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String, ForeignKey("users.id"))
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     direction = Column(String)  # BUY/SELL
-    ticker = Column(String)
+    instrument_ticker = Column(String)  # Было ticker, стало instrument_ticker
     qty = Column(Integer)
-    price = Column(Integer, nullable=True)  # null для рыночных ордеров
-    status = Column(String, default="NEW")  # NEW, EXECUTED, CANCELLED
-    created_at = Column(DateTime, server_default=func.now())
+    price = Column(Integer, nullable=True)
+    type = Column(String)  # Дополнительное поле (если нужно)
+    status = Column(String)  # Оставляем, если status есть в БД
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     filled = Column(Integer, default=0)
+    
     user = relationship("User")

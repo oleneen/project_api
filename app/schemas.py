@@ -83,3 +83,11 @@ class UpdateBalanceRequest(BaseModel):
 class Ok(BaseModel):
     message: str
     success: bool
+
+class Level(BaseModel):
+    price: int
+    quantity: int
+
+class L2OrderBook(BaseModel):
+    bids: List[Level]  # Заявки на покупку (от высокой цены к низкой)
+    asks: List[Level]  # Заявки на продажу (от низкой цены к высокой)

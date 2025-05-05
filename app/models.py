@@ -1,6 +1,8 @@
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
-from sqlalchemy.sql import func  # Добавьте эту строку
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy import Enum as SqlEnum
+import enum
 from .database import Base
 import uuid
 from sqlalchemy import text
@@ -19,27 +21,40 @@ class Instrument(Base):
     __tablename__ = "instruments"
     ticker = Column(String(10), primary_key=True)
     name = Column(String)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
 
 class Balance(Base):
     __tablename__ = "balances"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String, ForeignKey("users.id"))
-    ticker = Column(String)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
+    instrument_ticker = Column(String, ForeignKey("instruments.ticker"), primary_key=True)
     amount = Column(Integer, default=0)
     user = relationship("User")
 
+class OrderType(enum.Enum):
+    MARKET = "MARKET"
+    LIMIT = "LIMIT"
+
+class OrderDirection(enum.Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+
+class OrderStatus(enum.Enum):
+    NEW = "NEW"
+    EXECUTED = "EXECUTED"
+    PARTIALLY_EXECUTED = "PARTIALLY_EXECUTED"
+    CANCELLED = "CANCELLED"
+
 class Order(Base):
     __tablename__ = "orders"
-
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    direction = Column(String)  # BUY/SELL
-    instrument_ticker = Column(String)  # Было ticker, стало instrument_ticker
+    direction = Column(SqlEnum(OrderDirection, name="order_direction_enum"), nullable=False)
+    instrument_ticker = Column(String, ForeignKey("instruments.ticker"), nullable=False)
     qty = Column(Integer)
     price = Column(Integer, nullable=True)
-    type = Column(String)  # Дополнительное поле (если нужно)
-    status = Column(String)  # Оставляем, если status есть в БД
+    type = Column(SqlEnum(OrderType, name="order_type_enum"), nullable=False)
+    status = Column(SqlEnum(OrderStatus, name="order_status_enum"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     filled = Column(Integer, default=0)
-    
+
     user = relationship("User")

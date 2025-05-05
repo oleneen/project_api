@@ -1,4 +1,3 @@
-# /app/endpoints/order.py
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -6,23 +5,9 @@ from typing import List, Optional
 from ..database import get_db
 from ..models import Order, User
 from pydantic import BaseModel
+from ..schemas import OrderResponse
 
 router = APIRouter()
-
-# Модель для ответа
-class OrderResponse(BaseModel):
-    id: str
-    direction: str
-    instrument_ticker: str
-    qty: int
-    price: Optional[int]
-    type: Optional[str]
-    status: str
-    created_at: str
-    filled: int
-
-    class Config:
-        from_attributes = True
 
 @router.get("/orders", response_model=List[OrderResponse])
 async def get_user_orders(
@@ -34,7 +19,7 @@ async def get_user_orders(
         raise HTTPException(status_code=401, detail="Invalid API key")
     
     api_key = authorization.split(" ")[1]
-    
+    # TODO:у нас есть в admin.py есть чудесная функция получения пользователя по токену, давайте пользоваться ей
     # Получаем пользователя
     user = await db.execute(
         select(User).where(User.api_key == api_key)

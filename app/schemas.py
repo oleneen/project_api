@@ -22,14 +22,15 @@ class Balance(BaseModel):
     amount: int
 
 class OrderResponse(BaseModel):
-    id: UUID4
-    status: OrderStatus
-    direction: Direction
-    ticker: str
+    id: str
+    direction: str
+    instrument_ticker: str
     qty: int
     price: Optional[int]
+    type: Optional[str]
+    status: str
+    created_at: str
     filled: int
-    created_at: datetime
 
 class NewUser(BaseModel):
     name: str
@@ -82,10 +83,12 @@ class UpdateBalanceRequest(BaseModel):
 
 class Ok(BaseModel):
     success: bool = True
+
+#ниже правил:
 class Level(BaseModel):
     price: int
-    quantity: int
+    qty: int
 
 class L2OrderBook(BaseModel):
-    bids: List[Level]  # Заявки на покупку (от высокой цены к низкой)
-    asks: List[Level]  # Заявки на продажу (от низкой цены к высокой)
+    bids_levels: List[Level]  # Заявки на покупку (от высокой цены к низкой)
+    ask_levels: List[Level]  # Заявки на продажу (от низкой цены к высокой)

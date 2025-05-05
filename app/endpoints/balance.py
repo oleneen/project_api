@@ -1,12 +1,13 @@
-# /app/api/balance.py
 from fastapi import APIRouter, HTTPException, Depends, Header
-from typing import Optional, Dict
+from typing import Optional
+from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from .. import crud
+from ..schemas import Balance
 
 router = APIRouter()
-@router.get("/balance", response_model=Dict[str, int])
+@router.get("/balance", response_model=List[Balance])
 async def get_balances(
     authorization: Optional[str] = Header(None),
     db: AsyncSession = Depends(get_db)
@@ -22,7 +23,6 @@ async def get_balances(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Получаем балансы пользователя
     balances = await crud.get_user_balances(db, str(user.id))
     
     # Если у пользователя нет балансов, возвращаем пустой словарь

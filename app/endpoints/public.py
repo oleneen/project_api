@@ -8,7 +8,6 @@ from ..models import User as UserModel
 from ..database import get_db
 from uuid import uuid4
 from ..schemas import Level, L2OrderBook  
-from ..crud import get_orderbook_data  
 from fastapi.responses import JSONResponse
 from fastapi import Query
 import logging

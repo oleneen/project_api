@@ -42,8 +42,9 @@ async def create_user_balance(db: AsyncSession, user_id: str, ticker: str, amoun
     return balance
 
 async def get_user_balances(db: AsyncSession, user_id: str):
+    # TODO: поправить тикер, т.к. выдает 500 ошибку
     result = await db.execute(
-        select(models.Balance.ticker, models.Balance.amount)
+        select(models.Balance.instrument_ticker, models.Balance.amount)
         .where(models.Balance.user_id == user_id)
     )
     return result.all()  # Вернет список кортежей (ticker, amount)
@@ -65,6 +66,7 @@ async def get_order_by_id(db: AsyncSession, order_id: str, user_id: str = None):
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
+# TODO: у нас есть дублирование этого в admin.py
 async def withdraw_balance(db: AsyncSession, user_id: str, ticker: str, amount: int):
     result = await db.execute(
         select(models.Balance).where(
@@ -95,6 +97,7 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10):
     # Проверяем существование инструмента
     instrument = await db.execute(
         select(models.Instrument).where(models.Instrument.ticker == ticker)
+        #TODO: тут ошибка
     )
     if not instrument.scalar_one_or_none():
         raise ValueError(f"Инструмент {ticker} не найден")

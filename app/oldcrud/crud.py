@@ -1,6 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from . import models, schemas
+from fastapi import Header, HTTPException, Depends
+from .database import get_db
 
 async def get_user_by_token(db: AsyncSession, token: str):
     result = await db.execute(
@@ -137,3 +139,14 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10):
         "asks": asks
     }
 
+async def get_current_user(
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db)
+):
+    if not authorization.startswith("TOKEN "):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    token = authorization[6:]
+    user = await crud.get_user_by_token(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return user

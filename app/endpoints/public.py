@@ -4,14 +4,12 @@ from typing import List
 from .. import crud 
 from ..crud import get_instruments
 from ..schemas import User as UserSchema, NewUser, Instrument
-from ..models import User as UserModel
+from ..crud import register_user as register_user_crud
 from ..database import get_db
-from uuid import uuid4
-from ..schemas import Level, L2OrderBook  
+from ..schemas import L2OrderBook  
 from fastapi.responses import JSONResponse
 from fastapi import Query
 import logging
-
 
 
 router = APIRouter()
@@ -19,13 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/register", response_model=UserSchema)
-async def register_user(request: NewUser, AsyncSession: AsyncSession = Depends(get_db)):
-    api_key = f"key-{uuid4()}"
-    user = UserModel(name=request.name, api_key=api_key)
-    AsyncSession.add(user)
-    await AsyncSession.commit()
-    await AsyncSession.refresh(user)
-    return user
+async def register_user(request: NewUser, db: AsyncSession = Depends(get_db)):
+    return await register_user_crud(db, request)
 
 @router.get("/instrument", response_model=List[Instrument])
 async def list_instruments(db: AsyncSession = Depends(get_db)):

@@ -22,14 +22,14 @@ class Balance(BaseModel):
     amount: int
 
 class OrderResponse(BaseModel):
-    id: str
+    id: UUID4
     direction: str
     instrument_ticker: str
     qty: int
     price: Optional[int]
     type: Optional[str]
     status: str
-    created_at: str
+    created_at: datetime
     filled: int
 
 class NewUser(BaseModel):

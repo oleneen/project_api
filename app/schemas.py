@@ -1,36 +1,52 @@
-from pydantic import BaseModel, UUID4, conint
-from typing import Optional, List
+from pydantic import BaseModel, UUID4, Field
+from typing import Optional, List, Union
 from enum import Enum
 from datetime import datetime
 from decimal import Decimal
 
-class Direction(str, Enum):
-    BUY = "BUY"
-    SELL = "SELL"
+class CreateOrderResponse(BaseModel):
+    success: bool = Field(default=True, const=True)
+    order_id: UUID4
 
-class OrderStatus(str, Enum):
-    NEW = "NEW"
-    EXECUTED = "EXECUTED"
-    CANCELLED = "CANCELLED"
+class Direction(Enum):
+    BUY = 0
+    SELL = 1
 
-class UserRole(str, Enum):
-    USER = "USER"
-    ADMIN = "ADMIN"
+class OrderStatus(Enum):
+    NEW = 0
+    EXECUTED = 1
+    PARTIALLY_EXECUTED = 2
+    CANCELLED = 3
 
-class Balance(BaseModel):
+class UserRole(Enum):
+    USER = 0
+    ADMIN = 1
+
+class MarketOrderBody(BaseModel):
+    direction: Direction
     ticker: str
-    amount: int
-
-class OrderResponse(BaseModel):
-    id: UUID4
-    direction: str
-    instrument_ticker: str
     qty: int
-    price: Optional[int]
-    type: Optional[str]
-    status: str
-    created_at: datetime
-    filled: int
+
+class MarketOrder(BaseModel):
+    id: UUID4
+    status: OrderStatus
+    user_id: UUID4
+    timestamp: datetime
+    body: MarketOrderBody
+
+class LimitOrderBody(BaseModel):
+    direction: Direction
+    ticker: str
+    qty: int
+    price: int
+
+class LimitOrder(BaseModel):
+    id: UUID4
+    status: OrderStatus
+    user_id: UUID4
+    timestamp: datetime
+    body: LimitOrderBody
+    filled: int = 0
 
 class NewUser(BaseModel):
     name: str
@@ -45,34 +61,23 @@ class Instrument(BaseModel):
     name: str
     ticker: str
 
-class LimitOrderBody(BaseModel):
-    direction: str  # "BUY" или "SELL"
-    ticker: str
-    qty: int
-    price: int
-
-class MarketOrderBody(BaseModel):
-    direction: str
-    ticker: str
-    qty: int
-    
+#TODO: убираем? в свагере этого нет
 class StatusResponse(BaseModel):
     status: str
     message: Optional[str] = None
 
 # Схемы для операций с балансом
 class DepositRequest(BaseModel):
-    """Запрос на пополнение баланса"""
     user_id: UUID4
     ticker: str
-    amount: conint(gt=0)  # Положительное число
+    amount: int = Field(..., gt=0)
 
 class WithdrawRequest(BaseModel):
-    """Запрос на списание средств"""
     user_id: UUID4
     ticker: str
-    amount: conint(gt=0)  # Положительное число
+    amount: int = Field(..., gt=0)
 
+#TODO: это точно нужно здесь?
 class UpdateBalanceRequest(BaseModel):
     user_id: int  # ID пользователя, чей баланс нужно обновить
     operation: str  # Тип операции: "deposit" для пополнения или "withdraw" для списания
@@ -81,10 +86,15 @@ class UpdateBalanceRequest(BaseModel):
     class Config:
         from_attributes = True
 
+class Transaction(BaseModel):
+    ticker: str
+    amount: int
+    price: int
+    timestamp: datetime
+
 class Ok(BaseModel):
     success: bool = True
 
-#ниже правил:
 class Level(BaseModel):
     price: int
     qty: int
@@ -92,3 +102,11 @@ class Level(BaseModel):
 class L2OrderBook(BaseModel):
     bids_levels: List[Level]  # Заявки на покупку (от высокой цены к низкой)
     ask_levels: List[Level]  # Заявки на продажу (от низкой цены к высокой)
+
+class ValidationError:
+    loc: List[Union[str, int]]
+    msg: str
+    type: str
+
+class HTTPValidationError:
+    detail: List[ValidationError]

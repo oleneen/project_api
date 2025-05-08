@@ -4,12 +4,14 @@ from . import models, schemas
 from fastapi import Header, HTTPException, Depends
 from .database import get_db
 
+# TODO: можно удалить
 async def get_user_by_token(db: AsyncSession, token: str):
     result = await db.execute(
         select(models.User).where(models.User.api_key == token)
     )
     return result.scalar_one_or_none()
 
+# TODO: можно удалить
 async def create_instrument(db: AsyncSession, instrument: schemas.Instrument):
     db_instrument = models.Instrument(**instrument.dict())
     db.add(db_instrument)
@@ -17,10 +19,12 @@ async def create_instrument(db: AsyncSession, instrument: schemas.Instrument):
     await db.refresh(db_instrument)
     return db_instrument
 
+# TODO: можно удалить
 async def get_instruments(db: AsyncSession):
     result = await db.execute(select(models.Instrument))
     return result.scalars().all()
 
+# TODO: можно удалить
 async def get_instrument_by_ticker(db: AsyncSession, ticker: str):
     """
     Получает инструмент из базы данных по его тикеру.
@@ -37,12 +41,14 @@ async def get_instrument_by_ticker(db: AsyncSession, ticker: str):
     )
     return result.scalar_one_or_none()
 
+# TODO: Вот это не пересенено, посмотреть надо ли
 async def create_user_balance(db: AsyncSession, user_id: str, ticker: str, amount: int):
     balance = models.Balance(user_id=user_id, ticker=ticker, amount=amount)
     db.add(balance)
     await db.commit()
     return balance
 
+# TODO:Тут в crud..balances такая же функция, проверить выдает ли ошибку
 async def get_user_balances(db: AsyncSession, user_id: str):
     # TODO: поправить тикер, т.к. выдает 500 ошибку
     result = await db.execute(
@@ -51,6 +57,7 @@ async def get_user_balances(db: AsyncSession, user_id: str):
     )
     return result.all()  # Вернет список кортежей (ticker, amount)
 
+# TODO: Вот это не пересенено, посмотреть надо ли
 async def create_order(db: AsyncSession, order: schemas.LimitOrderBody | schemas.MarketOrderBody, user_id: str):
     db_order = models.Order(
         user_id=user_id,
@@ -61,6 +68,7 @@ async def create_order(db: AsyncSession, order: schemas.LimitOrderBody | schemas
     await db.refresh(db_order)
     return db_order
 
+# TODO: можно удалить
 async def get_order_by_id(db: AsyncSession, order_id: str, user_id: str = None):
     stmt = select(models.Order).where(models.Order.id == order_id)
     if user_id:
@@ -88,6 +96,7 @@ async def withdraw_balance(db: AsyncSession, user_id: str, ticker: str, amount: 
     await db.commit()
     return balance
 
+# TODO: перенести в crud..orderbook?
 async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10):
     """
     Получает стакан заявок для указанного тикера.
@@ -139,6 +148,7 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10):
         "asks": asks
     }
 
+# TODO: есть в dependencies, можно удалить
 async def get_current_user(
     authorization: str = Header(...),
     db: AsyncSession = Depends(get_db)

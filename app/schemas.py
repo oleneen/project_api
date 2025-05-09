@@ -1,11 +1,37 @@
 from pydantic import BaseModel, UUID4, Field
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Literal
 from enum import Enum
 from datetime import datetime
 from decimal import Decimal
 
+class Balance(BaseModel):
+    user_id: int
+    amount: float
+    currency: str = "USD"  # Пример значения по умолчанию
+
+    class Config:
+        from_attributes = True  # Для совместимости с ORM (ранее orm_mode=True)
+
+class OrderStatus(str, Enum):
+    NEW = "NEW"
+    EXECUTED = "EXECUTED"
+    CANCELLED = "CANCELLED"
+
+class Direction(str, Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+    
+class OrderResponse(BaseModel):
+    id: UUID4
+    status: OrderStatus
+    direction: Direction
+    ticker: str
+    qty: int
+    price: Optional[int]
+    filled: int
+    created_at: datetime
 class CreateOrderResponse(BaseModel):
-    success: bool = Field(default=True, const=True)
+    success: bool = Field(default=True)
     order_id: UUID4
 
 class Direction(Enum):
@@ -23,10 +49,10 @@ class UserRole(Enum):
     ADMIN = 1
 
 class MarketOrderBody(BaseModel):
-    direction: Direction
-    ticker: str
+    direction: Literal["BUY", "SELL"]
+    instrument_ticker: str
     qty: int
-
+    type: Literal["MARKET"] = "MARKET"
 class MarketOrder(BaseModel):
     id: UUID4
     status: OrderStatus
@@ -35,10 +61,11 @@ class MarketOrder(BaseModel):
     body: MarketOrderBody
 
 class LimitOrderBody(BaseModel):
-    direction: Direction
-    ticker: str
+    direction: Literal["BUY", "SELL"]
+    instrument_ticker: str
     qty: int
-    price: int
+    price: int  # Основное отличие от рыночного ордера
+    type: Literal["LIMIT"] = "LIMIT"  # Тип ордера
 
 class LimitOrder(BaseModel):
     id: UUID4

@@ -1,6 +1,130 @@
 from . import models
 from sqlalchemy import and_, or_
+from sqlalchemy import and_
+import logging
 
+logger = logging.getLogger(__name__)
+
+def execute_limit_order(db, new_order):
+    """
+    Обрабатывает новый лимитный ордер и пытается исполнить его сразу,
+    если есть подходящие противоположные ордера.
+    """
+    try:
+        # Определяем направление поиска противоположных ордеров
+        if new_order.direction == "BUY":
+            opposite_direction = "SELL"
+            price_condition = (models.Order.price <= new_order.price)
+            order_by = models.Order.price.asc()
+        else:
+            opposite_direction = "BUY"
+            price_condition = (models.Order.price >= new_order.price)
+            order_by = models.Order.price.desc()
+
+        # Ищем подходящие противоположные ордера
+        opposite_orders = db.query(models.Order).filter(
+            and_(
+                models.Order.instrument_ticker == new_order.instrument_ticker,
+                models.Order.direction == opposite_direction,
+                models.Order.status == "NEW",
+                models.Order.price.isnot(None),
+                price_condition
+            )
+        ).order_by(order_by).all()
+
+        remaining_qty = new_order.qty - new_order.filled
+
+        for opposite_order in opposite_orders:
+            if remaining_qty <= 0:
+                break
+
+            available_qty = opposite_order.qty - opposite_order.filled
+            executed_qty = min(available_qty, remaining_qty)
+
+            # Исполняем сделку
+            execute_trade(db, new_order, opposite_order, executed_qty)
+            remaining_qty -= executed_qty
+
+        # Обновляем статус нового ордера
+        if new_order.filled > 0:
+            if new_order.filled >= new_order.qty:
+                new_order.status = "FILLED"
+            else:
+                new_order.status = "PARTIALLY_FILLED"
+            db.commit()
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error executing limit order: {str(e)}")
+        raise
+
+def execute_trade(db, order1, order2, qty):
+    """
+    Исполняет сделку между двумя ордерами.
+    Обновляет балансы и статусы ордеров.
+    """
+    try:
+        # Определяем buyer и seller
+        if order1.direction == "BUY":
+            buyer_order = order1
+            seller_order = order2
+        else:
+            buyer_order = order2
+            seller_order = order1
+
+        execution_price = seller_order.price  # Исполняем по цене ордера в стакане
+        total_amount = execution_price * qty
+
+        # Обновляем балансы покупателя
+        update_balance(db, buyer_order.user_id, buyer_order.instrument_ticker, qty)
+        update_balance(db, buyer_order.user_id, "RUB", -total_amount)
+
+        # Обновляем балансы продавца
+        update_balance(db, seller_order.user_id, seller_order.instrument_ticker, -qty)
+        update_balance(db, seller_order.user_id, "RUB", total_amount)
+
+        # Обновляем ордера
+        order1.filled += qty
+        order2.filled += qty
+
+        if order1.filled >= order1.qty:
+            order1.status = "FILLED"
+        if order2.filled >= order2.qty:
+            order2.status = "FILLED"
+
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Trade execution failed: {str(e)}")
+        raise
+
+def update_balance(db, user_id, ticker, amount):
+    """
+    Обновляет баланс пользователя (синхронная версия).
+    Создает новую запись, если баланса нет.
+    """
+    balance = db.query(models.Balance).filter(
+        and_(
+            models.Balance.user_id == str(user_id),
+            models.Balance.ticker == ticker
+        )
+    ).first()
+
+    if balance:
+        balance.amount += amount
+        if balance.amount < 0:
+            raise ValueError("Insufficient funds")
+    else:
+        if amount < 0:
+            raise ValueError("Insufficient funds")
+        balance = models.Balance(
+            user_id=str(user_id),
+            ticker=ticker,
+            amount=amount
+        )
+        db.add(balance)
+        
 def match_orders(db):
 
     buy_orders = db.query(models.Order).filter(

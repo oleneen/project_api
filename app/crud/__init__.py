@@ -9,6 +9,5 @@ __all__ = [
     'create_instrument',
     'get_instruments',
     'get_instrument_by_ticker',
-    'create_user_balance',
     'get_user_balances',
 ]

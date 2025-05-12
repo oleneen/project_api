@@ -30,29 +30,20 @@ class OrderResponse(BaseModel):
     price: Optional[int]
     filled: int
     created_at: datetime
+
 class CreateOrderResponse(BaseModel):
     success: bool = Field(default=True)
     order_id: UUID4
 
-class Direction(Enum):
-    BUY = 0
-    SELL = 1
-
-class OrderStatus(Enum):
-    NEW = 0
-    EXECUTED = 1
-    PARTIALLY_EXECUTED = 2
-    CANCELLED = 3
-
 class UserRole(Enum):
-    USER = 0
-    ADMIN = 1
+    USER = "USER"
+    ADMIN = "ADMIN"
 
 class MarketOrderBody(BaseModel):
-    direction: Literal["BUY", "SELL"]
+    direction: Direction
     instrument_ticker: str
     qty: int
-    type: Literal["MARKET"] = "MARKET"
+
 class MarketOrder(BaseModel):
     id: UUID4
     status: OrderStatus
@@ -61,11 +52,10 @@ class MarketOrder(BaseModel):
     body: MarketOrderBody
 
 class LimitOrderBody(BaseModel):
-    direction: Literal["BUY", "SELL"]
+    direction: Direction
     instrument_ticker: str
     qty: int
-    price: int  # Основное отличие от рыночного ордера
-    type: Literal["LIMIT"] = "LIMIT"  # Тип ордера
+    price: int 
 
 class LimitOrder(BaseModel):
     id: UUID4
@@ -88,11 +78,6 @@ class Instrument(BaseModel):
     name: str
     ticker: str
 
-#TODO: убираем? в свагере этого нет
-class StatusResponse(BaseModel):
-    status: str
-    message: Optional[str] = None
-
 # Схемы для операций с балансом
 class DepositRequest(BaseModel):
     user_id: UUID4
@@ -103,15 +88,6 @@ class WithdrawRequest(BaseModel):
     user_id: UUID4
     ticker: str
     amount: int = Field(..., gt=0)
-
-#TODO: это точно нужно здесь?
-class UpdateBalanceRequest(BaseModel):
-    user_id: int  # ID пользователя, чей баланс нужно обновить
-    operation: str  # Тип операции: "deposit" для пополнения или "withdraw" для списания
-    amount: Decimal  # Сумма, на которую нужно изменить баланс
-
-    class Config:
-        from_attributes = True
 
 class Transaction(BaseModel):
     ticker: str

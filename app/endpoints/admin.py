@@ -21,4 +21,4 @@ async def add_instrument(
     
     await crud.create_instrument(db, instrument)
     
-    return {"success": True}
+    return schemas.Ok(success=True)

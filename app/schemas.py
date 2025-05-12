@@ -1,16 +1,7 @@
 from pydantic import BaseModel, UUID4, Field
-from typing import Optional, List, Union, Literal
+from typing import Optional, List, Union
 from enum import Enum
 from datetime import datetime
-from decimal import Decimal
-
-class Balance(BaseModel):
-    user_id: int
-    amount: float
-    currency: str = "USD"  # Пример значения по умолчанию
-
-    class Config:
-        from_attributes = True  # Для совместимости с ORM (ранее orm_mode=True)
 
 class OrderStatus(str, Enum):
     NEW = "NEW"
@@ -55,7 +46,7 @@ class LimitOrderBody(BaseModel):
     direction: Direction
     instrument_ticker: str
     qty: int
-    price: int 
+    price: int
 
 class LimitOrder(BaseModel):
     id: UUID4

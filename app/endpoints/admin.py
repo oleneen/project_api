@@ -2,14 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from .. import schemas, models, crud
 from ..database import get_db
-from ..dependencies.auth import get_current_user
+from ..dependencies.user import get_authenticated_user, get_target_user_by_id_or_404
+from ..dependencies.instruments import get_instrument_by_ticker_or_404
+
 
 router = APIRouter()
 
 @router.post("/instrument", response_model=schemas.Ok)
 async def add_instrument(
     instrument: schemas.Instrument,
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(get_authenticated_user),
     db: AsyncSession = Depends(get_db)
 ):
     if current_user.role != "ADMIN":
@@ -21,4 +23,25 @@ async def add_instrument(
     
     await crud.create_instrument(db, instrument)
     
+    return schemas.Ok(success=True)
+
+@router.post("/balance/deposit", response_model=schemas.Ok)
+async def deposit_balance(
+    deposit: schemas.DepositRequest,
+    current_user: models.User = Depends(get_authenticated_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Требуются права администратора")
+    
+    await get_target_user_by_id_or_404(deposit.user_id, db)
+    await get_instrument_by_ticker_or_404(deposit.ticker, db)
+    
+    await crud.update_user_balance(
+        db=db,
+        user_id=deposit.user_id,
+        ticker=deposit.ticker,
+        amount=deposit.amount
+    )
+
     return schemas.Ok(success=True)

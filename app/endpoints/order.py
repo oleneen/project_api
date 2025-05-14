@@ -5,7 +5,7 @@ from ..database import get_db
 from ..models import User
 import logging
 from ..schemas import CreateOrderResponse, LimitOrder, MarketOrder
-from ..dependencies.auth import get_current_user
+from ..dependencies.user import get_authenticated_user
 from ..crud import get_orders_by_user_id
 from .. import schemas  # Импорт модуля schemas
 from ..crud import (  # Импорт всех необходимых функций из crud
@@ -66,7 +66,7 @@ async def create_limit_order(
         
 @router.get("/orders")
 async def get_user_orders(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user),
     db: AsyncSession = Depends(get_db)
 ):
     db_orders = await get_orders_by_user_id(db, str(current_user.id))

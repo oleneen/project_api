@@ -49,9 +49,9 @@ async def process_market_order(
     5. Возвращает информацию об исполнении
     """
     # Проверяем существование инструмента
-    instrument = await get_instrument_by_ticker(db, order.instrument_ticker)
+    instrument = await get_instrument_by_ticker(db, order.ticker)
     if not instrument:
-        raise ValueError(f"Инструмент {order.instrument_ticker} не найден")
+        raise ValueError(f"Инструмент {order.ticker} не найден")
 
     # Создаем запись ордера в базе
     db_order = await create_order(db, order, user_id)
@@ -74,7 +74,7 @@ async def process_market_order(
         opposite_orders = await db.execute(
             select(models.Order)
             .where(
-                models.Order.instrument_ticker == order.instrument_ticker,
+                models.Order.ticker == order.ticker,
                 models.Order.direction == opposite_direction,
                 models.Order.status == "NEW"
             )
@@ -106,15 +106,15 @@ async def process_market_order(
             if order.direction == "BUY":
                 # Покупатель получает инструмент, отдает деньги
                 # Продавец получает деньги, отдает инструмент
-                await update_user_balance(db, user_id, order.instrument_ticker, executed_qty)
-                await update_user_balance(db, opposite_order.user_id, order.instrument_ticker, -executed_qty)
+                await update_user_balance(db, user_id, order.ticker, executed_qty)
+                await update_user_balance(db, opposite_order.user_id, order.ticker, -executed_qty)
                 await update_user_balance(db, user_id, "USD", -executed_qty * opposite_order.price)
                 await update_user_balance(db, opposite_order.user_id, "USD", executed_qty * opposite_order.price)
             else:
                 # Продавец отдает инструмент, получает деньги
                 # Покупатель получает инструмент, отдает деньги
-                await update_user_balance(db, user_id, order.instrument_ticker, -executed_qty)
-                await update_user_balance(db, opposite_order.user_id, order.instrument_ticker, executed_qty)
+                await update_user_balance(db, user_id, order.ticker, -executed_qty)
+                await update_user_balance(db, opposite_order.user_id, order.ticker, executed_qty)
                 await update_user_balance(db, user_id, "USD", executed_qty * opposite_order.price)
                 await update_user_balance(db, opposite_order.user_id, "USD", -executed_qty * opposite_order.price)
 
@@ -189,15 +189,15 @@ async def get_user_balance(db: AsyncSession, user_id: str, ticker: str) -> int:
 async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrderBody, user_id: str):
     try:
         # Проверяем инструмент
-        instrument = await get_instrument_by_ticker(db, order_data.instrument_ticker)
+        instrument = await get_instrument_by_ticker(db, order_data.ticker)
         if not instrument:
-            raise ValueError(f"Инструмент {order_data.instrument_ticker} не найден")
+            raise ValueError(f"Инструмент {order_data.ticker} не найден")
 
         # Создаем ордер (указываем статус явно!)
         db_order = models.Order(
             user_id=user_id,
             direction=order_data.direction,
-            instrument_ticker=order_data.instrument_ticker,
+            instrument_ticker=order_data.ticker,
             qty=order_data.qty,
             price=None,  # Для рыночного ордера цена не указывается
             type="MARKET",
@@ -208,7 +208,7 @@ async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrder
         await db.commit()
         await db.refresh(db_order)
         
-        return {"order": db_order, "message": "Рыночный ордер создан"}
+        return db_order
 
     except Exception as e:
         await db.rollback()
@@ -232,18 +232,18 @@ async def process_limit_order(
         raise ValueError("Пользователь не найден")
 
     # Проверка инструмента
-    instrument = await get_instrument_by_ticker(db, order_data.instrument_ticker)
+    instrument = await get_instrument_by_ticker(db, order_data.ticker)
     if not instrument:
-        raise ValueError(f"Инструмент {order_data.instrument_ticker} не найден")
+        raise ValueError(f"Инструмент {order_data.ticker} не найден")
 
     # Определяем нужный тикер для проверки баланса
-    balance_ticker = "RUB" if order_data.direction == "BUY" else order_data.instrument_ticker
+    balance_ticker = "RUB" if order_data.direction == "BUY" else order_data.ticker
     required_amount = order_data.price * order_data.qty if order_data.direction == "BUY" else order_data.qty
 
     # Проверка баланса
     balance = await get_user_balance(db, str(user.id), balance_ticker)
     if balance < required_amount:
-        error_msg = (f"Недостаточно {'RUB' if order_data.direction == 'BUY' else order_data.instrument_ticker} "
+        error_msg = (f"Недостаточно {'RUB' if order_data.direction == 'BUY' else order_data.ticker} "
                     f"(требуется: {required_amount}, доступно: {balance})")
         raise ValueError(error_msg)
 
@@ -251,7 +251,7 @@ async def process_limit_order(
     db_order = models.Order(
         user_id=user.id,
         direction=order_data.direction,
-        instrument_ticker=order_data.instrument_ticker,
+        instrument_ticker=order_data.ticker,
         qty=order_data.qty,
         price=order_data.price,
         type="LIMIT",

@@ -1,52 +1,45 @@
-from pydantic import BaseModel, UUID4, Field
-from typing import Optional, List, Union
+from pydantic import BaseModel, UUID4, Field, model_validator
+from typing import List, Union
 from enum import Enum
 from datetime import datetime
 
 class OrderStatus(str, Enum):
     NEW = "NEW"
     EXECUTED = "EXECUTED"
+    PARTIALLY_EXECUTED = "PARTIALLY_EXECUTED"
     CANCELLED = "CANCELLED"
 
 class Direction(str, Enum):
     BUY = "BUY"
     SELL = "SELL"
-    
-class OrderResponse(BaseModel):
-    id: UUID4
-    status: OrderStatus
-    direction: Direction
-    ticker: str
-    qty: int
-    price: Optional[int]
-    filled: int
-    created_at: datetime
 
 class CreateOrderResponse(BaseModel):
     success: bool = Field(default=True)
-    order_id: UUID4
+    order_id: UUID4 = Field(..., alias="id")
 
 class UserRole(Enum):
     USER = "USER"
     ADMIN = "ADMIN"
 
-class MarketOrderBody(BaseModel):
-    direction: Direction
-    instrument_ticker: str
-    qty: int
-
-class MarketOrder(BaseModel):
-    id: UUID4
-    status: OrderStatus
-    user_id: UUID4
-    timestamp: datetime
-    body: MarketOrderBody
 
 class LimitOrderBody(BaseModel):
     direction: Direction
-    instrument_ticker: str
+    ticker: str
     qty: int
     price: int
+
+    class Config:
+        from_attributes = True
+
+
+class MarketOrderBody(BaseModel):
+    direction: Direction
+    ticker: str
+    qty: int
+
+    class Config:
+        from_attributes = True
+
 
 class LimitOrder(BaseModel):
     id: UUID4
@@ -55,6 +48,71 @@ class LimitOrder(BaseModel):
     timestamp: datetime
     body: LimitOrderBody
     filled: int = 0
+
+    @model_validator(mode="before")
+    def assemble_body(cls, values):
+        if not isinstance(values, dict):
+            order = values
+            values = {
+                "id": order.id,
+                "status": order.status,
+                "user_id": order.user_id,
+                "timestamp": order.timestamp,
+                "filled": order.filled,
+                "direction": order.direction,
+                "instrument_ticker": order.instrument_ticker,
+                "qty": order.qty,
+                "price": order.price,
+            }
+        return {
+            **values,
+            "body": {
+                "direction": values["direction"],
+                "ticker": values["instrument_ticker"],
+                "qty": values["qty"],
+                "price": values["price"],
+            },
+        }
+
+    class Config:
+        from_attributes = True
+        validate_by_name = True
+
+
+class MarketOrder(BaseModel):
+    id: UUID4
+    status: OrderStatus
+    user_id: UUID4
+    timestamp: datetime
+    body: MarketOrderBody
+
+    @model_validator(mode="before")
+    def assemble_body(cls, values):
+        if not isinstance(values, dict):
+            order = values
+            values = {
+                "id": order.id,
+                "status": order.status,
+                "user_id": order.user_id,
+                "timestamp": order.timestamp,
+                "direction": order.direction,
+                "instrument_ticker": order.instrument_ticker,
+                "qty": order.qty,
+            }
+        return {
+            **values,
+            "body": {
+                "direction": values["direction"],
+                "ticker": values["instrument_ticker"],
+                "qty": values["qty"],
+            },
+        }
+
+    class Config:
+        from_attributes = True
+        validate_by_name = True
+
+OrderResponse = Union[MarketOrder, LimitOrder]
 
 class NewUser(BaseModel):
     name: str

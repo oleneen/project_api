@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import List, Optional, Union
 from ..database import get_db
 from ..models import User
 import logging
-from ..schemas import OrderResponse
+from ..schemas import CreateOrderResponse, LimitOrder, MarketOrder
 from ..dependencies.auth import get_current_user
 from ..crud import get_orders_by_user_id
 from .. import schemas  # Импорт модуля schemas
@@ -13,19 +13,14 @@ from ..crud import (  # Импорт всех необходимых функц�
     process_market_order,
     process_limit_order  # Добавлен импорт process_limit_order
 )
-from ..schemas import MarketOrderBody, LimitOrderBody  # Явный импорт нужных схем
+from ..schemas import MarketOrderBody  # Явный импорт нужных схем
 
 router = APIRouter(prefix="/api/v1")  # Добавьте prefix
 
 # Инициализация логгера
 logger = logging.getLogger(__name__)
 
-# Модель для ответа
-class OrderResponse(schemas.OrderResponse):  # Наследуемся от схемы из schemas.py
-    class Config:
-        from_attributes = True
-
-@router.post("/market-order")
+@router.post("/market-order", response_model=CreateOrderResponse, response_model_by_alias=False)
 async def create_market_order(
     order: MarketOrderBody,
     authorization: Optional[str] = Header(None),
@@ -52,7 +47,7 @@ async def create_market_order(
         logger.error(f"Market order error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.post("/limit-order")
+@router.post("/limit-order", response_model=CreateOrderResponse, response_model_by_alias=False)
 async def create_limit_order(
     order: schemas.LimitOrderBody,
     authorization: str = Header(...),  # Получаем токен из заголовка
@@ -69,9 +64,16 @@ async def create_limit_order(
         logger.error(f"Limit order error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
         
-@router.get("/orders", response_model=List[OrderResponse])
+@router.get("/orders")
 async def get_user_orders(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    return await get_orders_by_user_id(db, str(current_user.id))
+    db_orders = await get_orders_by_user_id(db, str(current_user.id))
+    out: List[Union[LimitOrder, MarketOrder]] = []
+    for order in db_orders:
+        if order.price is None:
+            out.append(MarketOrder.model_validate(order))
+        else:
+            out.append(LimitOrder.model_validate(order))
+    return out

@@ -15,13 +15,13 @@ class User(Base):
     name = Column(String(100), nullable=False)
     api_key = Column(String(100), unique=True, nullable=False)
     role = Column(String(10), nullable=False, server_default=text("USER"))
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    timestamp = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
 
 class Instrument(Base):
     __tablename__ = "instruments"
     ticker = Column(String(10), primary_key=True)
     name = Column(String)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    timestamp = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
 
 class Balance(Base):
     __tablename__ = "balances"
@@ -54,7 +54,7 @@ class Order(Base):
     price = Column(Integer, nullable=True)
     type = Column(SqlEnum(OrderType, name="order_type_enum"), nullable=False)
     status = Column(SqlEnum(OrderStatus, name="order_status_enum"), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
     filled = Column(Integer, default=0)
 
     user = relationship("User")

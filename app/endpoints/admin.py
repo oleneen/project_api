@@ -46,3 +46,30 @@ async def deposit_balance(
 
     return schemas.Ok(success=True)
 
+@router.post("/balance/withdraw", response_model=schemas.Ok)
+async def withdraw_from_balance(
+    withdraw: schemas.DepositRequest,  
+    current_user: models.User = Depends(get_authenticated_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Требуются права администратора")
+
+    await get_target_user_by_id_or_404(withdraw.user_id, db)
+    await get_instrument_by_ticker_or_404(withdraw.ticker, db)
+
+    current_balance = await crud.get_user_balance(db, withdraw.user_id, withdraw.ticker)
+    if current_balance < withdraw.amount:
+        raise HTTPException(status_code=400, detail="Недостаточно средств на балансе")
+
+    await crud.update_user_balance(
+        db=db,
+        user_id=withdraw.user_id,
+        ticker=withdraw.ticker,
+        amount=-withdraw.amount  
+    )
+
+    return schemas.Ok(success=True)
+
+
+

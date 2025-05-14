@@ -10,5 +10,6 @@ __all__ = [
     'get_instruments',
     'get_instrument_by_ticker',
     'get_user_balances',
-    'update_user_balance'
+    'update_user_balance',
+    'get_user_balance'
 ]

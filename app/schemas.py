@@ -112,8 +112,6 @@ class MarketOrder(BaseModel):
         from_attributes = True
         validate_by_name = True
 
-OrderResponse = Union[MarketOrder, LimitOrder]
-
 class NewUser(BaseModel):
     name: str
 

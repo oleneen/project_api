@@ -1,8 +1,10 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from .. import models, schemas
+from .. import schemas, models, crud
 from ..crud.users import get_user_by_token
 from ..crud.instruments import get_instrument_by_ticker
+from ..crud.balances import update_user_balance,get_user_balance
 import logging
 
 logger = logging.getLogger(__name__) 
@@ -106,7 +108,7 @@ async def process_market_order(
             if order.direction == "BUY":
                 # Покупатель получает инструмент, отдает деньги
                 # Продавец получает деньги, отдает инструмент
-                await update_user_balance(db, user_id, order.ticker, executed_qty)
+                await crud.update_user_balance(db, user_id, order.ticker, executed_qty)
                 await update_user_balance(db, opposite_order.user_id, order.ticker, -executed_qty)
                 await update_user_balance(db, user_id, "USD", -executed_qty * opposite_order.price)
                 await update_user_balance(db, opposite_order.user_id, "USD", executed_qty * opposite_order.price)
@@ -137,54 +139,6 @@ async def process_market_order(
         "avg_price": avg_price if total_executed > 0 else None
     }
 
-async def update_user_balance(db: AsyncSession, user_id: str, ticker: str, amount: int):
-    """
-    Вспомогательная функция для обновления баланса пользователя.
-    Если баланса нет - создает новую запись.
-    """
-    # Ищем существующий баланс
-    result = await db.execute(
-        select(models.Balance).where(
-            models.Balance.user_id == str(user_id),
-            models.Balance.instrument_ticker== ticker
-        )
-    )
-    balance = result.scalar_one_or_none()
-
-    if balance:
-        balance.amount += amount
-    else:
-        if amount < 0:
-            raise ValueError("Недостаточно средств")
-        balance = models.Balance(user_id=str(user_id), instrument_ticker=ticker, amount=amount)
-        db.add(balance)
-
-    await db.commit()
-    return balance
-
-async def get_user_balance(db: AsyncSession, user_id: str, ticker: str) -> int:
-    """Возвращает баланс пользователя по тикеру"""
-    from uuid import UUID
-    
-    try:
-        # Преобразуем user_id в UUID если это строка
-        user_uuid = UUID(user_id) if isinstance(user_id, str) else user_id
-        
-        result = await db.execute(
-            select(models.Balance.amount)
-            .where(
-                models.Balance.user_id == user_uuid,
-                models.Balance.instrument_ticker == ticker
-            )
-        )
-        balance = result.scalar()
-        return balance if balance is not None else 0
-    except ValueError:
-        logger.error(f"Invalid user_id format: {user_id}")
-        return 0
-    except Exception as e:
-        logger.error(f"Error getting balance: {str(e)}")
-        raise
 
 async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrderBody, user_id: str):
     try:

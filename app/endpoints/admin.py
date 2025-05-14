@@ -45,3 +45,4 @@ async def deposit_balance(
     )
 
     return schemas.Ok(success=True)
+

@@ -4,29 +4,54 @@ from typing import List, Optional, Union
 from ..database import get_db
 from ..models import User
 import logging
-from ..schemas import CreateOrderResponse, LimitOrder, MarketOrder
+from ..schemas import CreateOrderResponse, LimitOrder, MarketOrder, LimitOrderBody, MarketOrderBody
 from ..dependencies.user import get_authenticated_user
 from ..crud import get_orders_by_user_id
-from .. import schemas  # Импорт модуля schemas
-from ..crud import (  # Импорт всех необходимых функций из crud
+from .. import schemas
+from ..crud import (
     get_user_by_token,
     process_market_order,
-    process_limit_order  # Добавлен импорт process_limit_order
+    process_limit_order
 )
-from ..schemas import MarketOrderBody  # Явный импорт нужных схем
 
-router = APIRouter(prefix="/api/v1")  # Добавьте prefix
-
-# Инициализация логгера
+router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
 
-@router.post("/market-order", response_model=CreateOrderResponse, response_model_by_alias=False)
-async def create_market_order(
-    order: MarketOrderBody,
+@router.post("/order", response_model=CreateOrderResponse, response_model_by_alias=False)
+async def create_order(
+    order: Union[LimitOrderBody, MarketOrderBody],
     authorization: Optional[str] = Header(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Создание рыночного ордера"""
+    """
+    Создание ордера (рыночного или лимитного)
+    
+    Parameters:
+    - authorization: Токен авторизации в формате "TOKEN <token>"
+    - Request Body:
+        Для лимитного ордера:
+        {
+          "direction": "BUY" или "SELL",
+          "ticker": "string",
+          "qty": integer,
+          "price": integer
+        }
+        
+        Для рыночного ордера:
+        {
+          "direction": "BUY" или "SELL",
+          "ticker": "string",
+          "qty": integer
+        }
+    
+    Responses:
+    - 200: Успешный ответ
+        {
+          "success": true,
+          "order_id": "string"
+        }
+    - 422: Ошибка валидации
+    """
     # Проверка авторизации
     if not authorization or not authorization.startswith("TOKEN "):
         raise HTTPException(status_code=401, detail="Invalid API key")
@@ -39,31 +64,21 @@ async def create_market_order(
         raise HTTPException(status_code=404, detail="User not found")
     
     try:
-        result = await process_market_order(db, order, str(user.id))
-        return result
+        if isinstance(order, LimitOrderBody):
+            # Лимитный ордер
+            result = await process_limit_order(db, order, authorization)
+        else:
+            # Рыночный ордер
+            result = await process_market_order(db, order, str(user.id))
+            
+        return {"success": True, "id": str(result.id)}
+        
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Market order error: {str(e)}", exc_info=True)
+        logger.error(f"Order creation error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.post("/limit-order", response_model=CreateOrderResponse, response_model_by_alias=False)
-async def create_limit_order(
-    order: schemas.LimitOrderBody,
-    authorization: str = Header(...),  # Получаем токен из заголовка
-    db: AsyncSession = Depends(get_db)
-):
-    """Создание лимитного ордера"""
-    try:
-        # Передаем authorization вместо user_id
-        result = await process_limit_order(db, order, authorization)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Limit order error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
-        
 @router.get("/orders")
 async def get_user_orders(
     current_user: User = Depends(get_authenticated_user),

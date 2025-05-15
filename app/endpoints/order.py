@@ -79,7 +79,7 @@ async def create_order(
         logger.error(f"Order creation error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.get("/orders")
+@router.get("/order")
 async def get_user_orders(
     current_user: User = Depends(get_authenticated_user),
     db: AsyncSession = Depends(get_db)

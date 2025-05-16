@@ -125,7 +125,6 @@ class Instrument(BaseModel):
     name: str
     ticker: str
 
-# Схемы для операций с балансом
 class DepositRequest(BaseModel):
     user_id: UUID4
     ticker: str
@@ -150,8 +149,8 @@ class Level(BaseModel):
     qty: int
 
 class L2OrderBook(BaseModel):
-    bids_levels: List[Level]  # Заявки на покупку (от высокой цены к низкой)
-    ask_levels: List[Level]  # Заявки на продажу (от низкой цены к высокой)
+    bids_levels: List[Level]  
+    ask_levels: List[Level] 
 
 class ValidationError:
     loc: List[Union[str, int]]

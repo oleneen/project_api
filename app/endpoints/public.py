@@ -34,17 +34,9 @@ async def list_instruments(db: AsyncSession = Depends(get_db)):
 @router.get("/orderbook/{ticker}", response_model=L2OrderBook)
 async def get_orderbook(
     ticker: str,
-    limit: int = Query(10, gt=0, le=25),  # Ограничения из OpenAPI
+    limit: int = Query(10, gt=0, le=25),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Получение стакана заявок для указанного тикера.
-    
-    Responses:
-        200: Успешный ответ со стаканом заявок
-        404: Если инструмент не найден или нет активных заявок
-        500: Ошибка сервера
-    """
     try:
         orderbook = await crud.get_orderbook_data(db, ticker, limit)
         
@@ -57,7 +49,6 @@ async def get_orderbook(
         return orderbook
         
     except ValueError as e:
-        # Случай, когда инструмент не найден
         return JSONResponse(
             status_code=404,
             content={"detail": str(e)}

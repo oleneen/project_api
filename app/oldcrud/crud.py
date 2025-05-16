@@ -11,7 +11,7 @@ async def get_user_balances(db: AsyncSession, user_id: str):
         select(models.Balance.instrument_ticker, models.Balance.amount)
         .where(models.Balance.user_id == user_id)
     )
-    return result.all()  # Вернет список кортежей (ticker, amount)
+    return result.all()
 
 # TODO: у нас есть дублирование этого в admin.py
 async def withdraw_balance(db: AsyncSession, user_id: str, ticker: str, amount: int):
@@ -35,14 +35,6 @@ async def withdraw_balance(db: AsyncSession, user_id: str, ticker: str, amount: 
 
 # TODO: перенести в crud..orderbook?
 async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10):
-    """
-    Получает стакан заявок для указанного тикера.
-    Возвращает:
-        - dict с bids и asks, если есть заявки
-        - None, если нет ни одной заявки
-        - raises Exception, если инструмент не найден
-    """
-    # Проверяем существование инструмента
     instrument = await db.execute(
         select(models.Instrument).where(models.Instrument.ticker == ticker)
         #TODO: тут ошибка
@@ -50,7 +42,6 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10):
     if not instrument.scalar_one_or_none():
         raise ValueError(f"Инструмент {ticker} не найден")
 
-    # Получаем заявки на покупку (BID)
     bids_result = await db.execute(
         select(models.Order)
         .where(
@@ -63,7 +54,6 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10):
     )
     bids = [{"price": o.price, "qty": o.qty} for o in bids_result.scalars().all()]
 
-    # Получаем заявки на продажу (ASK)
     asks_result = await db.execute(
         select(models.Order)
         .where(
@@ -76,7 +66,6 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10):
     )
     asks = [{"price": o.price, "qty": o.qty} for o in asks_result.scalars().all()]
 
-    # Если нет ни одной заявки - возвращаем None
     if not bids and not asks:
         return None
 

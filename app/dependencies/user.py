@@ -6,16 +6,18 @@ from ..models import User
 from uuid import UUID
 
 async def get_authenticated_user(
-    authorization: str = Header(...),
+    authorization: str = Header(..., alias="Authorization"),
     db: AsyncSession = Depends(get_db)
 ) -> User:
     if not authorization.startswith("TOKEN "):
         raise HTTPException(401, "Неправильный формат токена")
-    user = await get_user_by_token(db, authorization[6:])
+    
+    api_key = authorization[6:].strip()
+    user = await get_user_by_token(db, api_key)
+    
     if not user:
         raise HTTPException(401, "Токен не найден")
     return user
-
 
 async def get_target_user_by_id_or_404(
     user_id: UUID,

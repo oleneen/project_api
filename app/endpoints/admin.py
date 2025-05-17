@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
 from .. import schemas, models, crud
 from ..database import get_db
 from ..dependencies.user import get_authenticated_user, get_target_user_by_id_or_404
@@ -72,4 +73,33 @@ async def withdraw_from_balance(
     return schemas.Ok(success=True)
 
 
+@router.delete("/instruments/{ticker}", response_model=schemas.Ok)
+async def delete_instrument(
+    ticker: str,
+    current_user: models.User = Depends(get_authenticated_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Требуются права администратора")
 
+    instrument = await get_instrument_by_ticker_or_404(ticker, db)
+    await db.delete(instrument)
+    await db.commit()
+
+    return schemas.Ok(success=True)
+
+
+@router.delete("/users/{user_id}", response_model=schemas.Ok)
+async def delete_user(
+    user: models.User = Depends(get_target_user_by_id_or_404),
+    current_user: models.User = Depends(get_authenticated_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=403, detail="Требуются права администратора")
+
+    await crud.delete_user_all_data(user.id, db)
+    await db.delete(user)
+    await db.commit()
+
+    return schemas.Ok(success=True)

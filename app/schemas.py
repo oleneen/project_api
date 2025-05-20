@@ -149,7 +149,7 @@ class Level(BaseModel):
     qty: int
 
 class L2OrderBook(BaseModel):
-    bids_levels: List[Level]  
+    bid_levels: List[Level]  
     ask_levels: List[Level] 
 
 class ValidationError:

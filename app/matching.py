@@ -1,11 +1,12 @@
 from . import models
-from sqlalchemy import and_, or_
 from sqlalchemy import and_
 import logging
+from .crud import create_transaction
 
 logger = logging.getLogger(__name__)
 
-def execute_limit_order(db, new_order):
+
+async def execute_limit_order(db, new_order):
     try:
         if new_order.direction == "BUY":
             opposite_direction = "SELL"
@@ -35,7 +36,7 @@ def execute_limit_order(db, new_order):
             available_qty = opposite_order.qty - opposite_order.filled
             executed_qty = min(available_qty, remaining_qty)
 
-            execute_trade(db, new_order, opposite_order, executed_qty)
+            await execute_trade(db, new_order, opposite_order, executed_qty)
             remaining_qty -= executed_qty
 
         if new_order.filled > 0:
@@ -50,7 +51,8 @@ def execute_limit_order(db, new_order):
         logger.error(f"Error executing limit order: {str(e)}")
         raise
 
-def execute_trade(db, order1, order2, qty):
+
+async def execute_trade(db, order1, order2, qty):
     try:
         if order1.direction == "BUY":
             buyer_order = order1
@@ -76,12 +78,15 @@ def execute_trade(db, order1, order2, qty):
         if order2.filled >= order2.qty:
             order2.status = "FILLED"
 
+        await create_transaction(order1, order2, qty, db)
+
         db.commit()
 
     except Exception as e:
         db.rollback()
         logger.error(f"Trade execution failed: {str(e)}")
         raise
+
 
 def update_balance(db, user_id, ticker, amount):
     balance = db.query(models.Balance).filter(

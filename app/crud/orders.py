@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .. import models, schemas
 from .. import schemas, models, crud
 from ..crud.instruments import get_instrument_by_ticker
-from ..crud.balances import update_user_balance,get_user_balance
+from ..crud.balances import update_user_balance,get_user_balance, get_available_balance, lock_user_balance
 import logging
 
 logger = logging.getLogger(__name__) 
@@ -165,7 +165,7 @@ async def process_limit_order(
         balance_ticker = "RUB" if order_data.direction == "BUY" else order_data.ticker
         required_amount = order_data.price * order_data.qty if order_data.direction == "BUY" else order_data.qty
 
-        balance = await get_user_balance(db, user_id, balance_ticker)
+        balance = await get_available_balance(db, user_id, balance_ticker)
         if balance < required_amount:
             error_msg = (f"Недостаточно {balance_ticker} "
                         f"(требуется: {required_amount}, доступно: {balance})")
@@ -182,6 +182,8 @@ async def process_limit_order(
             filled=0
         )
         
+        await lock_user_balance(db, user_id, balance_ticker, required_amount)
+
         db.add(db_order)
         await db.commit()
         await db.refresh(db_order)

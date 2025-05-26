@@ -36,7 +36,7 @@ async def list_instruments(db: AsyncSession = Depends(get_db)):
 @router.get("/orderbook/{ticker}", response_model=L2OrderBook)
 async def get_orderbook(
     ticker: str,
-    limit: int = Query(10, gt=0, le=25),
+    limit: int = Query(10, gt=0),
     db: AsyncSession = Depends(get_db)
 ):
     try:

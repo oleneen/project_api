@@ -12,6 +12,9 @@ from ..crud import (
     process_market_order,
     process_limit_order
 )
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
+from ..crud.orders import get_order_by_id as crud_get_order_by_id
 
 router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
@@ -50,3 +53,27 @@ async def get_user_orders(
         else:
             out.append(LimitOrder.model_validate(order))
     return out
+
+@router.get("/order/{order_id}")
+async def get_order_by_id_endpoint(
+    order_id: str,
+    current_user: User = Depends(get_authenticated_user),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        db_order = await crud_get_order_by_id(db, order_id, str(current_user.id))
+        if not db_order:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        if db_order.price is not None:
+            order_out = LimitOrder.model_validate(db_order)
+        else:
+            order_out = MarketOrder.model_validate(db_order)
+
+        return JSONResponse(content=jsonable_encoder(order_out), status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")

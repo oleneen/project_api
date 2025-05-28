@@ -1,7 +1,7 @@
 from . import models
 from sqlalchemy import and_
 import logging
-from .crud import create_transaction
+from .crud.transactions import create_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ async def execute_limit_order(db, new_order):
             and_(
                 models.Order.instrument_ticker == new_order.instrument_ticker,
                 models.Order.direction == opposite_direction,
-                models.Order.status == "NEW",
+                models.Order.status.in_(["NEW", "PARTIALLY_FILLED"]),
                 models.Order.price.isnot(None),
                 price_condition
             )

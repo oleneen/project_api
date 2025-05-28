@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional, Union
+from typing import List, Union
 from ..database import get_db
-from ..models import User
+from ..models import User, OrderStatus
 import logging
-from ..schemas import CreateOrderResponse, LimitOrder, MarketOrder, LimitOrderBody, MarketOrderBody
+from ..schemas import CreateOrderResponse, LimitOrder, MarketOrder, LimitOrderBody, MarketOrderBody, Ok
 from ..dependencies.user import get_authenticated_user
 from ..crud import get_orders_by_user_id
 from ..crud import (
-    get_user_by_token,
     process_market_order,
-    process_limit_order
+    process_limit_order,
+    unlock_user_balance
 )
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
@@ -76,4 +76,44 @@ async def get_order_by_id_endpoint(
         raise
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+@router.delete("/order/{order_id}", response_model=Ok)
+async def cancel_order(
+    order_id: str,
+    current_user: User = Depends(get_authenticated_user),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        order = await crud_get_order_by_id(db, order_id, str(current_user.id))
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        if order.status not in [OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot cancel order with status {order.status.value}"
+            )
+        
+        if order.type == "LIMIT":
+            balance_ticker = "RUB" if order.direction == "BUY" else order.instrument_ticker
+            locked_amount = order.price * (order.qty - order.filled) if order.direction == "BUY" else (order.qty - order.filled)
+            
+            await unlock_user_balance(
+                db=db,
+                user_id=str(current_user.id),
+                ticker=balance_ticker,
+                amount=locked_amount
+            )
+        
+        order.status = OrderStatus.CANCELLED
+        await db.commit()
+        
+        return Ok()
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error cancelling order: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

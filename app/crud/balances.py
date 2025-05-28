@@ -67,3 +67,11 @@ async def get_user_balance(db: AsyncSession, user_id: UUID, ticker: str) -> int:
     )
     balance = result.scalar()
     return balance if balance is not None else 0
+
+async def unlock_user_balance(db: AsyncSession, user_id: str, ticker: str, amount: int):
+    await db.execute(
+        update(models.Balance)
+        .where(models.Balance.user_id == user_id, models.Balance.instrument_ticker == ticker)
+        .values(locked=models.Balance.locked + amount)
+    )
+    

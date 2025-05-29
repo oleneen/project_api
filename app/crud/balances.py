@@ -38,24 +38,31 @@ async def update_user_balance(db: AsyncSession, user_id: str, ticker: str, amoun
     balance = result.scalar_one_or_none()
 
     if balance:
-        balance.amount += amount
+        new_amount = balance.amount + amount
 
-        if balance.amount == 0:
+        # Проверка, что после изменения amount не станет меньше locked
+        if new_amount < balance.locked:
+            raise ValueError("Недостаточно доступных средств (учитывая заблокированные)")
+
+        balance.amount = new_amount
+
+        if balance.amount == 0 and balance.locked == 0:
             await db.delete(balance)
-        elif balance.amount < 0:
-            raise ValueError("Недостаточно средств")
+
     else:
         if amount < 0:
             raise ValueError("Нельзя снять средства с несуществующего баланса")
         balance = models.Balance(
             user_id=str(user_id),
             instrument_ticker=ticker,
-            amount=amount
+            amount=amount,
+            locked=0  # начально заблокировано 0
         )
         db.add(balance)
 
     await db.commit()
     return balance
+
 
 
 async def get_user_balance(db: AsyncSession, user_id: UUID, ticker: str) -> int:

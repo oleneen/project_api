@@ -59,7 +59,7 @@ async def withdraw_from_balance(
     await get_target_user_by_id_or_404(withdraw.user_id, db)
     await get_instrument_by_ticker_or_404(withdraw.ticker, db)
 
-    current_balance = await crud.get_user_balance(db, withdraw.user_id, withdraw.ticker)
+    current_balance = await crud.get_available_balance(db, withdraw.user_id, withdraw.ticker)
     if current_balance < withdraw.amount:
         raise HTTPException(status_code=400, detail="Недостаточно средств на балансе")
 

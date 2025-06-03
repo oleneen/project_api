@@ -67,7 +67,7 @@ class Transaction(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ticker = Column(String(10), nullable=False)
     qty = Column(Integer, nullable=False)
-    price = Column(Integer, nullable=False)
+    price = Column(Integer, nullable=True)
     timestamp = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
 
     buy_order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)

@@ -1,111 +1,152 @@
 from . import models
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from .crud.balances import transfer_balance
 from .crud.transactions import create_transaction
+from .models import Order, OrderDirection, OrderStatus,OrderType
 
 logger = logging.getLogger(__name__)
 
+async def execute_limit_order(session: AsyncSession, order: Order) -> None:
+    opposite_side = OrderDirection.SELL if order.direction == OrderDirection.BUY else OrderDirection.BUY
 
-async def execute_limit_order(db, new_order):
-    try:
-        if new_order.direction == "BUY":
-            opposite_direction = "SELL"
-            price_condition = (models.Order.price <= new_order.price)
-            order_by = models.Order.price.asc()
-        else:
-            opposite_direction = "BUY"
-            price_condition = (models.Order.price >= new_order.price)
-            order_by = models.Order.price.desc()
-
-        opposite_orders = db.query(models.Order).filter(
+    stmt = (
+        select(Order)
+        .where(
             and_(
-                models.Order.instrument_ticker == new_order.instrument_ticker,
-                models.Order.direction == opposite_direction,
-                models.Order.status.in_(["NEW", "PARTIALLY_FILLED"]),
-                models.Order.price.isnot(None),
-                price_condition
+                Order.instrument_ticker == order.instrument_ticker,
+                Order.direction == opposite_side,
+                Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]),
+                Order.price <= order.price if order.direction == OrderDirection.BUY else Order.price >= order.price,
             )
-        ).order_by(order_by).all()
+        )
+        .order_by(Order.timestamp)
+    )
 
-        remaining_qty = new_order.qty - new_order.filled
+    result = await session.execute(stmt)
+    matching_orders = result.scalars().all()
 
-        for opposite_order in opposite_orders:
-            if remaining_qty <= 0:
-                break
+    if not matching_orders:
+        return
 
-            available_qty = opposite_order.qty - opposite_order.filled
-            executed_qty = min(available_qty, remaining_qty)
+    remaining_qty = order.qty - order.filled
 
-            await execute_trade(db, new_order, opposite_order, executed_qty)
-            remaining_qty -= executed_qty
+    for counter_order in matching_orders:
+        if remaining_qty == 0:
+            break
 
-        if new_order.filled > 0:
-            if new_order.filled >= new_order.qty:
-                new_order.status = "FILLED"
-            else:
-                new_order.status = "PARTIALLY_FILLED"
-            db.commit()
+        available_qty = counter_order.qty - counter_order.filled
+        trade_qty = min(remaining_qty, available_qty)
+        trade_price = counter_order.price
 
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error executing limit order: {str(e)}")
-        raise
+        buyer_id = order.user_id if order.direction == OrderDirection.BUY else counter_order.user_id
+        seller_id = counter_order.user_id if order.direction == OrderDirection.BUY else order.user_id
 
+        await transfer_balance(session, buyer_id, seller_id, trade_qty * trade_price)
+        await execute_trade(session, order, counter_order, trade_qty, trade_price)
 
-async def execute_trade(db, order1, order2, qty):
-    try:
-        if order1.direction == "BUY":
-            buyer_order = order1
-            seller_order = order2
+        counter_order.filled += trade_qty
+        if counter_order.filled == counter_order.qty:
+            counter_order.status = OrderStatus.EXECUTED
         else:
-            buyer_order = order2
-            seller_order = order1
+            counter_order.status = OrderStatus.PARTIALLY_EXECUTED
 
-        execution_price = seller_order.price 
-        total_amount = execution_price * qty
+        remaining_qty -= trade_qty
 
-        update_balance(db, buyer_order.user_id, buyer_order.instrument_ticker, qty)
-        update_balance(db, buyer_order.user_id, "RUB", -total_amount)
+    order.filled = order.qty - remaining_qty
+    if order.filled == order.qty:
+        order.status = OrderStatus.EXECUTED
+    else:
+        order.status = OrderStatus.PARTIALLY_EXECUTED
 
-        update_balance(db, seller_order.user_id, seller_order.instrument_ticker, -qty)
-        update_balance(db, seller_order.user_id, "RUB", total_amount)
+    await session.commit()
 
-        order1.filled += qty
-        order2.filled += qty
+async def execute_market_order(session: AsyncSession, order: Order) -> None:
+    opposite_side = OrderDirection.SELL if order.direction == OrderDirection.BUY else OrderDirection.BUY
 
-        if order1.filled >= order1.qty:
-            order1.status = "FILLED"
-        if order2.filled >= order2.qty:
-            order2.status = "FILLED"
+    stmt = (
+        select(Order)
+        .where(
+            and_(
+                Order.instrument_ticker == order.instrument_ticker,
+                Order.direction == opposite_side,
+                Order.status == OrderStatus.NEW,
+                Order.price.isnot(None), 
+                Order.type == OrderType.LIMIT  
+            )
+        )
+        .order_by(
+            Order.price.asc() if order.direction == OrderDirection.BUY else Order.price.desc(),
+            Order.timestamp.asc()
+        )
+    )
 
-        await create_transaction(order1, order2, qty, db)
+    result = await session.execute(stmt)
+    matching_orders = result.scalars().all()
 
-        db.commit()
+    if not matching_orders:
+        return
+
+    remaining_qty = order.qty - order.filled
+
+    for counter_order in matching_orders:
+        if remaining_qty == 0:
+            break
+
+        available_qty = counter_order.qty - counter_order.filled
+        trade_qty = min(remaining_qty, available_qty)
+        trade_price = counter_order.price
+
+        if order.direction == OrderDirection.BUY:
+            buyer_id = order.user_id
+            seller_id = counter_order.user_id
+        else:
+            buyer_id = counter_order.user_id
+            seller_id = order.user_id
+
+        await transfer_balance(session, buyer_id, seller_id, trade_qty * trade_price)
+        await execute_trade(session, order, counter_order, trade_qty, trade_price)
+
+        counter_order.filled += trade_qty
+        if counter_order.filled == counter_order.qty:
+            counter_order.status = OrderStatus.EXECUTED
+        else:
+            counter_order.status = OrderStatus.PARTIALLY_EXECUTED
+
+        remaining_qty -= trade_qty
+
+    order.filled = order.qty - remaining_qty
+    if order.filled == order.qty:
+        order.status = OrderStatus.EXECUTED
+    else:
+        order.status = OrderStatus.PARTIALLY_EXECUTED
+
+    await session.commit()
+
+async def execute_trade(
+    session: AsyncSession,
+    order1: models.Order,
+    order2: models.Order,
+    qty: float,
+    price: float,
+):
+    try:
+        buyer = order1 if order1.direction == OrderDirection.BUY else order2
+        seller = order2 if order1.direction == OrderDirection.BUY else order1
+
+        transaction = models.Transaction(
+            ticker=order1.instrument_ticker,
+            qty=qty,
+            price=price,
+            buy_order_id=buyer.id,
+            sell_order_id=seller.id
+        )
+        session.add(transaction)
+
+        await create_transaction(order1, order2, qty, session)  
 
     except Exception as e:
-        db.rollback()
+        await session.rollback()
         logger.error(f"Trade execution failed: {str(e)}")
         raise
-
-
-def update_balance(db, user_id, ticker, amount):
-    balance = db.query(models.Balance).filter(
-        and_(
-            models.Balance.user_id == str(user_id),
-            models.Balance.ticker == ticker
-        )
-    ).first()
-
-    if balance:
-        balance.amount += amount
-        if balance.amount < 0:
-            raise ValueError("Insufficient funds")
-    else:
-        if amount < 0:
-            raise ValueError("Insufficient funds")
-        balance = models.Balance(
-            user_id=str(user_id),
-            ticker=ticker,
-            amount=amount
-        )
-        db.add(balance)

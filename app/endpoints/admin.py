@@ -89,7 +89,7 @@ async def delete_instrument(
     return schemas.Ok(success=True)
 
 
-@router.delete("/users/{user_id}", response_model=schemas.Ok)
+@router.delete("/user/{user_id}", response_model=schemas.User)
 async def delete_user(
     user: models.User = Depends(get_target_user_by_id_or_404),
     current_user: models.User = Depends(get_authenticated_user),
@@ -102,4 +102,4 @@ async def delete_user(
     await db.delete(user)
     await db.commit()
 
-    return schemas.Ok(success=True)
+    return user

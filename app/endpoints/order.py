@@ -31,7 +31,7 @@ async def create_order(
         else:
             result = await process_market_order(db, order, str(current_user.id))
             
-        return {"success": True, "id": str(result.id)}
+        return {"success": True, "order_id": str(result.id)}
         
     except ValueError as e:
         logger.error(f"Validation error: {str(e)}")

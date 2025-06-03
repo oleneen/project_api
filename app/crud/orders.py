@@ -1,10 +1,12 @@
-from sqlalchemy import select
+from sqlalchemy import select,and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from .. import models, schemas
 from ..crud.instruments import get_instrument_by_ticker
-from ..crud.balances import update_user_balance,get_user_balance, get_available_balance, lock_user_balance
+from ..crud.balances import get_user_balance, get_available_balance, lock_user_balance
 import logging
-from ..matching import execute_limit_order
+from ..schemas import OrderStatus
+from ..models import OrderDirection,Order
+from ..matching import execute_limit_order,execute_market_order
 
 logger = logging.getLogger(__name__) 
 
@@ -22,44 +24,67 @@ async def get_orders_by_user_id(db: AsyncSession, user_id: str):
     )
     return result.scalars().all()
 
-async def process_market_order(
-    db: AsyncSession, 
-    order_data: schemas.MarketOrderBody, 
-    user_id: str
-):
-    try:
-        instrument = await get_instrument_by_ticker(db, order_data.ticker)
-        if not instrument:
-            raise ValueError(f"Инструмент {order_data.ticker} не найден")
+async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrderBody, user_id: str):
+    instrument = await get_instrument_by_ticker(db, order_data.ticker)
+    if not instrument:
+        raise ValueError(f"Инструмент {order_data.ticker} не найден")
 
-        balance_ticker = "RUB" if order_data.direction == "BUY" else order_data.ticker
-        required_amount = order_data.qty
-        
-        balance = await get_user_balance(db, user_id, balance_ticker)
-        if balance < required_amount:
-            error_msg = (f"Недостаточно {balance_ticker} "
-                        f"(требуется: {required_amount}, доступно: {balance})")
-            raise ValueError(error_msg)
+    opposite_side = OrderDirection.SELL if order_data.direction == "BUY" else OrderDirection.BUY
 
-        db_order = models.Order(
-            user_id=user_id,
-            direction=order_data.direction,
-            instrument_ticker=order_data.ticker,
-            qty=order_data.qty,
-            price=None,
-            type="MARKET",
-            status="NEW",
-            filled=0
+    stmt = (
+        select(Order)
+        .where(
+            and_(
+                Order.instrument_ticker == order_data.ticker,
+                Order.direction == opposite_side,
+                Order.status == OrderStatus.NEW,
+                Order.type == "LIMIT"
+            )
         )
-        
-        db.add(db_order)
-        await db.commit()
-        await db.refresh(db_order)
-        return db_order
+        .order_by(Order.price.asc() if order_data.direction == "BUY" else Order.price.desc(), Order.timestamp)
+    )
+    result = await db.execute(stmt)
+    matching_orders = result.scalars().all()
 
-    except Exception as e:
-        await db.rollback()
-        raise ValueError(f"Ошибка при создании рыночного ордера: {str(e)}")
+    if not matching_orders:
+        raise ValueError("Нет подходящих лимитных ордеров для исполнения рыночной заявки")
+
+    
+    balance_ticker = "RUB" if order_data.direction == "BUY" else order_data.ticker
+    balance = await get_user_balance(db, user_id, balance_ticker)
+    
+    max_price = max(o.price for o in matching_orders) if order_data.direction == "BUY" else 0
+    required_amount = order_data.qty * max_price if order_data.direction == "BUY" else order_data.qty
+    if balance < required_amount:
+        raise ValueError(f"Недостаточно {balance_ticker} (требуется примерно {required_amount}, доступно {balance})")
+
+    db_order = models.Order(
+        user_id=user_id,
+        direction=order_data.direction,
+        instrument_ticker=order_data.ticker,
+        qty=order_data.qty,
+        price=None,
+        type="MARKET",
+        status="NEW",
+        filled=0
+    )
+    db.add(db_order)
+    await db.commit()
+    await db.refresh(db_order)
+
+   
+    await execute_market_order(db, db_order)  
+
+    if db_order.filled == 0:
+        await db.delete(db_order)
+        await db.commit()
+        raise ValueError("Рыночный ордер не удалось исполнить — недостаточно встречных лимитных ордеров")
+    if db_order.filled < db_order.qty:
+        db_order.status = OrderStatus.CANCELLED
+        await db.commit()
+        raise ValueError("Рыночный ордер не удалось полностью исполнить из-за недостатка встречных ордеров")
+
+    return db_order
 
 async def process_limit_order(
     db: AsyncSession,

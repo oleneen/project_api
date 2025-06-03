@@ -1,7 +1,8 @@
-from sqlalchemy import select, update
+from sqlalchemy import select, update,and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from .. import models
+from ..schemas import HTTPValidationError
 
 async def get_user_balances(db: AsyncSession, user_id: str):
     result = await db.execute(
@@ -40,7 +41,6 @@ async def update_user_balance(db: AsyncSession, user_id: str, ticker: str, amoun
     if balance:
         new_amount = balance.amount + amount
 
-        # Проверка, что после изменения amount не станет меньше locked
         if new_amount < balance.locked:
             raise ValueError("Недостаточно доступных средств (учитывая заблокированные)")
 
@@ -56,7 +56,7 @@ async def update_user_balance(db: AsyncSession, user_id: str, ticker: str, amoun
             user_id=str(user_id),
             instrument_ticker=ticker,
             amount=amount,
-            locked=0  # начально заблокировано 0
+            locked=0  
         )
         db.add(balance)
 
@@ -82,3 +82,39 @@ async def unlock_user_balance(db: AsyncSession, user_id: str, ticker: str, amoun
         .values(locked=models.Balance.locked + amount)
     )
     
+async def transfer_balance(
+    session: AsyncSession,
+    from_user_id: str,
+    to_user_id: str,
+    amount: float,
+    ticker: str = "RUB"  
+) -> None:
+    if amount <= 0:
+        raise ValueError("Transfer amount must be positive")
+
+    sender_stmt = select(models.Balance).where(
+        and_(models.Balance.user_id == from_user_id, models.Balance.instrument_ticker == ticker)
+    )
+    sender_result = await session.execute(sender_stmt)
+    sender_balance = sender_result.scalar_one_or_none()
+
+    if not sender_balance or sender_balance.amount < amount:
+        raise HTTPValidationError(status_code=400, detail="Insufficient funds")
+
+    receiver_stmt = select(models.Balance).where(
+        and_(models.Balance.user_id == to_user_id, models.Balance.instrument_ticker == ticker)
+    )
+    receiver_result = await session.execute(receiver_stmt)
+    receiver_balance = receiver_result.scalar_one_or_none()
+
+    sender_balance.amount -= amount
+
+    if receiver_balance:
+        receiver_balance.amount += amount
+    else:
+        new_balance = models.Balance(
+            user_id=to_user_id,
+            instrument_ticker=ticker,
+            amount=amount
+        )
+        session.add(new_balance)

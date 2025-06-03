@@ -15,8 +15,8 @@ class Direction(str, Enum):
 
 class CreateOrderResponse(BaseModel):
     success: bool = Field(default=True)
-    order_id: UUID4 = Field(..., alias="id")
-
+    order_id: UUID4
+    
 class UserRole(Enum):
     USER = "USER"
     ADMIN = "ADMIN"

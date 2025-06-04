@@ -141,6 +141,9 @@ class Transaction(BaseModel):
     price: int
     timestamp: datetime
 
+    class Config:
+        orm_mode = True
+
 class Ok(BaseModel):
     success: bool = True
 

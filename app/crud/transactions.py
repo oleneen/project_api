@@ -13,8 +13,14 @@ async def get_transactions(db: AsyncSession, ticker: str, limit: int = 10):
     return result.scalars().all()
 
 
-async def create_transaction(order: models.Order, opposite_order: models.Order, qty: int, db: AsyncSession):
-    if order.direction == "BUY":
+async def create_transaction(
+    order: models.Order,
+    opposite_order: models.Order,
+    qty: int,
+    price: int,  
+    db: AsyncSession
+):
+    if order.direction == models.OrderDirection.BUY:
         buyer_order = order
         seller_order = opposite_order
     else:
@@ -24,7 +30,7 @@ async def create_transaction(order: models.Order, opposite_order: models.Order, 
     transaction = models.Transaction(
         ticker=order.instrument_ticker,
         qty=qty,
-        price=seller_order.price,
+        price=price,  
         buy_order_id=buyer_order.id,
         sell_order_id=seller_order.id,
     )

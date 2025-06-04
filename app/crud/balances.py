@@ -118,3 +118,83 @@ async def transfer_balance(
             amount=amount
         )
         session.add(new_balance)
+
+async def apply_trade(
+    db: AsyncSession,
+    buyer_id: str,
+    seller_id: str,
+    ticker: str,         # Например "SBER"
+    price: int,          # Цена за единицу
+    quantity: int,       # Кол-во проданных единиц
+    initial_locked_price: int  # Цена, по которой покупатель изначально выставлял заявку
+):
+    total_cost = price * quantity                        # Фактическая сумма сделки
+    initial_total_locked = initial_locked_price * quantity  # Залоченная сумма
+
+    # --- Покупатель ---
+    buyer_stmt = select(models.Balance).where(
+        models.Balance.user_id == buyer_id,
+        models.Balance.instrument_ticker == "RUB"
+    )
+    buyer_result = await db.execute(buyer_stmt)
+    buyer_balance = buyer_result.scalar_one()
+
+    if buyer_balance.locked < initial_total_locked:
+        raise ValueError("Недостаточно залоченных средств у покупателя")
+
+    # Снимаем реальную стоимость сделки
+    buyer_balance.locked -= initial_total_locked
+    buyer_balance.amount -= total_cost
+
+
+    # Добавляем актив покупателю
+    buyer_asset_stmt = select(models.Balance).where(
+        models.Balance.user_id == buyer_id,
+        models.Balance.instrument_ticker == ticker
+    )
+    buyer_asset_result = await db.execute(buyer_asset_stmt)
+    buyer_asset_balance = buyer_asset_result.scalar_one_or_none()
+
+    if buyer_asset_balance:
+        buyer_asset_balance.amount += quantity
+    else:
+        db.add(models.Balance(
+            user_id=buyer_id,
+            instrument_ticker=ticker,
+            amount=quantity,
+            locked=0
+        ))
+
+    # --- Продавец ---
+    seller_stmt = select(models.Balance).where(
+        models.Balance.user_id == seller_id,
+        models.Balance.instrument_ticker == ticker
+    )
+    seller_result = await db.execute(seller_stmt)
+    seller_balance = seller_result.scalar_one()
+
+    if seller_balance.locked < quantity:
+        raise ValueError("Недостаточно залоченных инструментов у продавца")
+
+    seller_balance.locked -= quantity
+    seller_balance.amount -= quantity
+
+    # Добавляем рубли продавцу
+    seller_rub_stmt = select(models.Balance).where(
+        models.Balance.user_id == seller_id,
+        models.Balance.instrument_ticker == "RUB"
+    )
+    seller_rub_result = await db.execute(seller_rub_stmt)
+    seller_rub_balance = seller_rub_result.scalar_one_or_none()
+
+    if seller_rub_balance:
+        seller_rub_balance.amount += total_cost
+    else:
+        db.add(models.Balance(
+            user_id=seller_id,
+            instrument_ticker="RUB",
+            amount=total_cost,
+            locked=0
+        ))
+
+    await db.commit()

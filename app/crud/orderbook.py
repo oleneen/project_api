@@ -14,7 +14,7 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10) -> 
         .where(
             models.Order.instrument_ticker == ticker,
             models.Order.direction == models.OrderDirection.BUY,
-            models.Order.status == models.OrderStatus.NEW,
+            models.Order.status.in_([models.OrderStatus.NEW, models.OrderStatus.PARTIALLY_EXECUTED]),
             models.Order.type == models.OrderType.LIMIT
         )
         .order_by(
@@ -33,7 +33,7 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10) -> 
         .where(
             models.Order.instrument_ticker == ticker,
             models.Order.direction == models.OrderDirection.SELL,
-            models.Order.status == models.OrderStatus.NEW,
+            models.Order.status.in_([models.OrderStatus.NEW, models.OrderStatus.PARTIALLY_EXECUTED]),
             models.Order.type == models.OrderType.LIMIT
         )
         .order_by(

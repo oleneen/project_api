@@ -23,7 +23,6 @@ async def get_orders_by_user_id(db: AsyncSession, user_id: str):
         select(models.Order).where(models.Order.user_id == str(user_id))
     )
     return result.scalars().all()
-
 async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrderBody, user_id: str):
     instrument = await get_instrument_by_ticker(db, order_data.ticker)
     if not instrument:
@@ -37,7 +36,7 @@ async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrder
             and_(
                 Order.instrument_ticker == order_data.ticker,
                 Order.direction == opposite_side,
-                Order.status == OrderStatus.NEW,
+                Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]),
                 Order.type == "LIMIT"
             )
         )
@@ -49,10 +48,14 @@ async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrder
     if not matching_orders:
         raise ValueError("Нет подходящих лимитных ордеров для исполнения рыночной заявки")
 
-    
+    # Новая проверка: суммарное доступное количество лимитных ордеров
+    total_available_qty = sum(o.qty - o.filled for o in matching_orders)
+    if total_available_qty < order_data.qty:
+        raise ValueError(f"Недостаточно встречных лимитных ордеров: доступно {total_available_qty}, требуется {order_data.qty}")
+
     balance_ticker = "RUB" if order_data.direction == "BUY" else order_data.ticker
     balance = await get_user_balance(db, user_id, balance_ticker)
-    
+
     max_price = max(o.price for o in matching_orders) if order_data.direction == "BUY" else 0
     required_amount = order_data.qty * max_price if order_data.direction == "BUY" else order_data.qty
     if balance < required_amount:
@@ -69,22 +72,22 @@ async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrder
         filled=0
     )
     db.add(db_order)
-    await db.commit()
+    await db.commit()  
+
     await db.refresh(db_order)
 
-   
-    await execute_market_order(db, db_order)  
+    try:
+        await execute_market_order(db, db_order)
 
-    if db_order.filled == 0:
+        await db.commit()  
+        return db_order
+
+    except Exception as e:
+        await db.rollback()
         await db.delete(db_order)
         await db.commit()
-        raise ValueError("Рыночный ордер не удалось исполнить — недостаточно встречных лимитных ордеров")
-    if db_order.filled < db_order.qty:
-        db_order.status = OrderStatus.CANCELLED
-        await db.commit()
-        raise ValueError("Рыночный ордер не удалось полностью исполнить из-за недостатка встречных ордеров")
+        raise ValueError(f"Ошибка исполнения рыночного ордера: {str(e)}")
 
-    return db_order
 
 async def process_limit_order(
     db: AsyncSession,
@@ -122,6 +125,7 @@ async def process_limit_order(
         await db.commit()
         await db.refresh(db_order)
         await execute_limit_order(db, db_order)
+        await db.commit()
         return db_order
 
     except Exception as e:

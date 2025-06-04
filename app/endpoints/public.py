@@ -71,7 +71,16 @@ async def get_transactions_history(
 ):
     try:
         transactions = await get_transactions(db, ticker, limit)
-        return transactions
+        # Здесь мы пересчитываем amount вручную
+        return [
+            Transaction(
+                ticker=t.ticker,
+                amount=t.qty * t.price,  # <--- вот это ключевое
+                price=t.price,
+                timestamp=t.timestamp,
+            )
+            for t in transactions
+        ]
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Ошибка при получении транзакций: {str(e)}")

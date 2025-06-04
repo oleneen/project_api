@@ -14,5 +14,6 @@ __all__ = [
     'update_user_balance',
     'get_user_balance',
     'get_transactions',
-    'create_transaction'
+    'create_transaction',
+    'process_limit_order'
 ]

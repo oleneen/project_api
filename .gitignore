@@ -2,7 +2,7 @@ venv
 venv/
 .venv/
 *.json
-.env
+.env*
 .DS_Store
 .mypy_cache/
 _pycache__/

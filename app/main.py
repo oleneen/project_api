@@ -1,11 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from .endpoints.public import router as public_router
 from .endpoints.admin import router as admin_router 
 from .endpoints.balance import router as balance_router 
 from .endpoints.order import router as order_router 
 from app.endpoints import order
 
-app = FastAPI()
+app = FastAPI(debug=True)
 
 app.include_router(order.router)
 app.include_router(order_router, prefix="/api/v1")

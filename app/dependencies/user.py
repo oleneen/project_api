@@ -6,7 +6,7 @@ from ..models import User
 from uuid import UUID
 
 async def get_authenticated_user(
-    authorization: str = Header(..., alias="Authorization"),
+    authorization: str = Header(..., alias="Authorizations"),
     db: AsyncSession = Depends(get_db)
 ) -> User:
     if not authorization.startswith("TOKEN "):

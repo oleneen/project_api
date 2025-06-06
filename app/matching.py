@@ -98,12 +98,16 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
     if not matching_orders:
         return
 
+
     remaining_qty = order.qty - order.filled
 
     for counter_order in matching_orders:
         if remaining_qty == 0:
             break
-
+        if counter_order.price is None:
+                logger.warning(f"Пропущен ордер без цены: {counter_order.id}")
+                continue
+        
         available_qty = counter_order.qty - counter_order.filled
         trade_qty = min(remaining_qty, available_qty)
         trade_price = counter_order.price
@@ -115,7 +119,7 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
         try:
             
             initial_locked_price = counter_order.price
-            
+
             await apply_trade(
                 session,
                 buyer_id,

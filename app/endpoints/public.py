@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from .. import crud
-from ..crud import get_instruments, get_transactions
+from ..crud import get_instruments, get_transactions,get_instrument_by_ticker
 from ..schemas import User as UserSchema, NewUser, Instrument, Transaction
 from ..crud import register_user as register_user_crud
 from ..database import get_db
@@ -40,6 +40,10 @@ async def get_orderbook(
     db: AsyncSession = Depends(get_db)
 ):
     try:
+        instrument = await get_instrument_by_ticker(db, ticker)
+        if not instrument:
+            raise HTTPException(status_code=404, detail="Инструмент не найден")
+        
         orderbook = await crud.get_orderbook_data(db, ticker, limit)
 
         if orderbook is None:
@@ -49,7 +53,8 @@ async def get_orderbook(
             )
 
         return orderbook
-
+    except HTTPException as e:
+        raise e  # <-- пробрасываем как есть, не превращаем в 500
     except ValueError as e:
         return JSONResponse(
             status_code=404,

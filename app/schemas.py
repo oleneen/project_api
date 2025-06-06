@@ -113,7 +113,7 @@ class MarketOrder(BaseModel):
         validate_by_name = True
 
 class NewUser(BaseModel):
-    name: str
+    name: str = Field(..., min_length=3)
 
 class User(BaseModel):
     id: UUID4

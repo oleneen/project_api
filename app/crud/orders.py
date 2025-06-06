@@ -73,9 +73,9 @@ async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrder
     )
     db.add(db_order)
     await db.commit()  
-
     await db.refresh(db_order)
-
+    await lock_user_balance(db, user_id, balance_ticker, required_amount)
+    
     try:
         await execute_market_order(db, db_order)
 

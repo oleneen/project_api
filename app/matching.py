@@ -114,8 +114,8 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
 
         try:
             
-            initial_locked_price = order.price if order.direction == OrderDirection.BUY else counter_order.price
-
+            initial_locked_price = counter_order.price
+            
             await apply_trade(
                 session,
                 buyer_id,

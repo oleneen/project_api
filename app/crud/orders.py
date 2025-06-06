@@ -23,12 +23,26 @@ async def get_orders_by_user_id(db: AsyncSession, user_id: str):
         select(models.Order).where(models.Order.user_id == str(user_id))
     )
     return result.scalars().all()
+
 async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrderBody, user_id: str):
     instrument = await get_instrument_by_ticker(db, order_data.ticker)
     if not instrument:
         raise ValueError(f"Инструмент {order_data.ticker} не найден")
 
     opposite_side = OrderDirection.SELL if order_data.direction == "BUY" else OrderDirection.BUY
+    db_order = models.Order(
+        user_id=user_id,
+        direction=order_data.direction,
+        instrument_ticker=order_data.ticker,
+        qty=order_data.qty,
+        price=None,
+        type="MARKET",
+        status=OrderStatus.NEW,
+        filled=0
+    )
+    db.add(db_order)
+    await db.commit()  
+    await db.refresh(db_order)
 
     stmt = (
         select(Order)
@@ -46,11 +60,15 @@ async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrder
     matching_orders = result.scalars().all()
 
     if not matching_orders:
+        db_order.status = OrderStatus.CANCELLED  # или просто "CANCELED" если без Enum
+        await db.commit()
         raise ValueError("Нет подходящих лимитных ордеров для исполнения рыночной заявки")
 
     # Новая проверка: суммарное доступное количество лимитных ордеров
     total_available_qty = sum(o.qty - o.filled for o in matching_orders)
     if total_available_qty < order_data.qty:
+        db_order.status = OrderStatus.CANCELLED  # или просто "CANCELED" если без Enum
+        await db.commit()
         raise ValueError(f"Недостаточно встречных лимитных ордеров: доступно {total_available_qty}, требуется {order_data.qty}")
 
     balance_ticker = "RUB" if order_data.direction == "BUY" else order_data.ticker
@@ -59,21 +77,11 @@ async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrder
     max_price = max(o.price for o in matching_orders) if order_data.direction == "BUY" else 0
     required_amount = order_data.qty * max_price if order_data.direction == "BUY" else order_data.qty
     if balance < required_amount:
+        db_order.status = OrderStatus.CANCELLED  # или просто "CANCELED" если без Enum
+        await db.commit()
         raise ValueError(f"Недостаточно {balance_ticker} (требуется примерно {required_amount}, доступно {balance})")
 
-    db_order = models.Order(
-        user_id=user_id,
-        direction=order_data.direction,
-        instrument_ticker=order_data.ticker,
-        qty=order_data.qty,
-        price=None,
-        type="MARKET",
-        status="NEW",
-        filled=0
-    )
-    db.add(db_order)
-    await db.commit()  
-    await db.refresh(db_order)
+    
     await lock_user_balance(db, user_id, balance_ticker, required_amount)
     
     try:
@@ -84,7 +92,6 @@ async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrder
 
     except Exception as e:
         await db.rollback()
-        await db.delete(db_order)
         await db.commit()
         raise ValueError(f"Ошибка исполнения рыночного ордера: {str(e)}")
 

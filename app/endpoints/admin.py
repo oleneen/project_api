@@ -20,7 +20,7 @@ async def add_instrument(
     
     db_instrument = await crud.get_instrument_by_ticker(db, instrument.ticker)
     if db_instrument:
-        return schemas.Ok(success=True)
+        raise HTTPException(status_code=400, detail="Инструмент уже существует")
 
     await crud.create_instrument(db, instrument)
     

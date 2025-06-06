@@ -123,7 +123,7 @@ class User(BaseModel):
 
 class Instrument(BaseModel):
     name: str
-    ticker: str
+    ticker: str = Field(..., min_length=2, max_length=10, pattern="^[A-Z]{2,10}$")
 
 class DepositRequest(BaseModel):
     user_id: UUID4

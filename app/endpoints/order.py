@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
 from typing import List, Union
 from ..database import get_db
 from ..models import User, OrderStatus
@@ -85,6 +86,10 @@ async def cancel_order(
     db: AsyncSession = Depends(get_db)
 ):
     try:
+        try:
+            uuid_obj = UUID(order_id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Order not found")
         order = await crud_get_order_by_id(db, order_id, str(current_user.id))
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")

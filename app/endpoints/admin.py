@@ -73,7 +73,7 @@ async def withdraw_from_balance(
     return schemas.Ok(success=True)
 
 
-@router.delete("/instruments/{ticker}", response_model=schemas.Ok)
+@router.delete("/instrument/{ticker}", response_model=schemas.Ok)
 async def delete_instrument(
     ticker: str,
     current_user: models.User = Depends(get_authenticated_user),

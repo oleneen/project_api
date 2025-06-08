@@ -9,7 +9,7 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10) -> 
     bids_result = await db.execute(
         select(
             models.Order.price,
-            (models.Order.qty - models.Order.filled).label("remaining_qty")
+            func.sum(models.Order.qty - models.Order.filled).label("total_qty")
         )
         .where(
             models.Order.instrument_ticker == ticker,
@@ -17,9 +17,9 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10) -> 
             models.Order.status.in_([models.OrderStatus.NEW, models.OrderStatus.PARTIALLY_EXECUTED]),
             models.Order.type == models.OrderType.LIMIT
         )
+        .group_by(models.Order.price)
         .order_by(
             models.Order.price.desc(),
-            models.Order.timestamp.asc()
         )
         .limit(limit)
     )
@@ -28,7 +28,7 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10) -> 
     asks_result = await db.execute(
         select(
             models.Order.price,
-            (models.Order.qty - models.Order.filled).label("remaining_qty")
+            func.sum(models.Order.qty - models.Order.filled).label("total_qty")
         )
         .where(
             models.Order.instrument_ticker == ticker,
@@ -36,9 +36,9 @@ async def get_orderbook_data(db: AsyncSession, ticker: str, limit: int = 10) -> 
             models.Order.status.in_([models.OrderStatus.NEW, models.OrderStatus.PARTIALLY_EXECUTED]),
             models.Order.type == models.OrderType.LIMIT
         )
+        .group_by(models.Order.price)
         .order_by(
             models.Order.price.asc(),
-            models.Order.timestamp.asc()
         )
         .limit(limit)
     )

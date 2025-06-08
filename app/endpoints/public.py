@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from .. import crud
-from ..crud import get_instruments, get_transactions,get_instrument_by_ticker
+from ..crud import get_instruments, get_transactions, get_instrument_by_ticker
 from ..schemas import User as UserSchema, NewUser, Instrument, Transaction
 from ..crud import register_user as register_user_crud
 from ..database import get_db
@@ -47,10 +47,7 @@ async def get_orderbook(
         orderbook = await crud.get_orderbook_data(db, ticker, limit)
 
         if orderbook is None:
-            return JSONResponse(
-                status_code=404,
-                content={"detail": f"Нет активных заявок для инструмента {ticker}"}
-            )
+            return L2OrderBook(bid_levels=[], ask_levels=[])
 
         return orderbook
     except HTTPException as e:
@@ -71,7 +68,7 @@ async def get_orderbook(
 @router.get("/transactions/{ticker}", response_model=List[Transaction])
 async def get_transactions_history(
     ticker: str,
-    limit: int = Query(10, gt=0, le=25),
+    limit: int = Query(10, gt=0),
     db: AsyncSession = Depends(get_db)
 ):
     try:

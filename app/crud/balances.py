@@ -3,7 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from .. import models
 from ..schemas import HTTPValidationError
-
+from ..models import User, OrderStatus, Balance
+import logging
+logger = logging.getLogger(__name__)
 async def get_user_balances(db: AsyncSession, user_id: str):
     result = await db.execute(
         select(models.Balance.instrument_ticker, models.Balance.amount)
@@ -77,9 +79,9 @@ async def get_user_balance(db: AsyncSession, user_id: UUID, ticker: str) -> int:
 
 async def unlock_user_balance(db: AsyncSession, user_id: str, ticker: str, amount: int):
     await db.execute(
-        update(models.Balance)
-        .where(models.Balance.user_id == user_id, models.Balance.instrument_ticker == ticker)
-        .values(locked=models.Balance.locked + amount)
+        update(Balance)
+        .where(Balance.user_id == user_id, Balance.instrument_ticker == ticker)
+        .values(locked=Balance.locked - amount)
     )
     
 async def transfer_balance(

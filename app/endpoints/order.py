@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
+from sqlalchemy import select, update
 from typing import List, Union
 from ..database import get_db
-from ..models import User, OrderStatus
+from ..models import User, OrderStatus, Balance
 import logging
 from ..schemas import CreateOrderResponse, LimitOrder, MarketOrder, LimitOrderBody, MarketOrderBody, Ok
 from ..dependencies.user import get_authenticated_user
@@ -13,6 +14,7 @@ from ..crud import (
     process_limit_order,
     unlock_user_balance
 )
+from app.models import OrderType
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from ..crud.orders import get_order_by_id as crud_get_order_by_id
@@ -87,7 +89,7 @@ async def cancel_order(
 ):
     try:
         try:
-            uuid_obj = UUID(order_id)
+            UUID(order_id)
         except ValueError:
             raise HTTPException(status_code=404, detail="Order not found")
         order = await crud_get_order_by_id(db, order_id, str(current_user.id))
@@ -99,16 +101,36 @@ async def cancel_order(
                 status_code=400,
                 detail=f"Cannot cancel order with status {order.status.value}"
             )
-        
-        if order.type == "LIMIT":
-            balance_ticker = "RUB" if order.direction == "BUY" else order.instrument_ticker
-            locked_amount = order.price * (order.qty - order.filled) if order.direction == "BUY" else (order.qty - order.filled)
+        if order.type == OrderType.LIMIT:
+            if order.direction.value == "BUY":
+                balance_ticker = "RUB"
+                locked_amount = order.price * (order.qty - order.filled)
+            else:
+                balance_ticker = order.instrument_ticker
+                locked_amount = order.qty - order.filled
+            current_balance = await db.execute(
+                select(Balance)
+                .where(
+                    Balance.user_id == str(current_user.id),
+                    Balance.instrument_ticker == balance_ticker
+                )
+                .with_for_update()
+            )
+            current_balance = current_balance.scalar_one_or_none()
             
-            await unlock_user_balance(
-                db=db,
-                user_id=str(current_user.id),
-                ticker=balance_ticker,
-                amount=locked_amount
+            if not current_balance:
+                raise HTTPException(status_code=400, detail="Balance not found")
+
+            if current_balance.locked < locked_amount:
+                raise HTTPException(status_code=400, detail="Not enough locked balance")
+
+            await db.execute(
+                update(Balance)
+                .where(
+                    Balance.user_id == str(current_user.id),
+                    Balance.instrument_ticker == balance_ticker
+                )
+                .values(locked=Balance.locked - locked_amount)
             )
         
         order.status = OrderStatus.CANCELLED

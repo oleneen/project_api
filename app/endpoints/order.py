@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from ..crud.orders import get_order_by_id as crud_get_order_by_id
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.post("/order", response_model=CreateOrderResponse)

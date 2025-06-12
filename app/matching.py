@@ -118,7 +118,7 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
 
         try:
             
-            initial_locked_price = counter_order.price
+            initial_locked_price = counter_order.price if counter_order.price is not None else trade_price
 
             await apply_trade(
                 session,

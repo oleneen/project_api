@@ -13,20 +13,10 @@ async def get_user_by_token(db: AsyncSession, token: str):
     return result.scalar_one_or_none()
 
 async def register_user(db: AsyncSession, user_data: NewUser):
-    res = await db.execute(select(models.User).where(models.User.name == user_data.name))
-    existing = res.scalar_one_or_none()
-    if existing:
-        return existing
-
     api_key = f"key-{uuid4()}"
     user = models.User(name=user_data.name, api_key=api_key)
     db.add(user)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        res = await db.execute(select(models.User).where(models.User.name == user_data.name))
-        return res.scalar_one()
+    await db.commit()
     await db.refresh(user)
     return user
 

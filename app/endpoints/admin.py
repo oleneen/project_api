@@ -49,7 +49,7 @@ async def deposit_balance(
 
 @router.post("/balance/withdraw", response_model=schemas.Ok)
 async def withdraw_from_balance(
-    withdraw: schemas.DepositRequest,  
+    withdraw: schemas.WithdrawRequest,  
     current_user: models.User = Depends(get_authenticated_user),
     db: AsyncSession = Depends(get_db)
 ):

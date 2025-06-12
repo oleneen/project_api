@@ -25,7 +25,7 @@ class UserRole(Enum):
 class LimitOrderBody(BaseModel):
     direction: Direction
     ticker: str
-    qty: int
+    qty: int = Field(..., gt=0)
     price: int
 
     class Config:
@@ -35,7 +35,7 @@ class LimitOrderBody(BaseModel):
 class MarketOrderBody(BaseModel):
     direction: Direction
     ticker: str
-    qty: int
+    qty: int = Field(..., gt=0)
 
     class Config:
         from_attributes = True
@@ -120,6 +120,9 @@ class User(BaseModel):
     name: str
     role: UserRole
     api_key: str
+
+    class Config:
+        orm_mode = True
 
 class Instrument(BaseModel):
     name: str

@@ -89,9 +89,10 @@ async def cancel_order(
 ):
     try:
         try:
-            UUID(order_id)
+            order_uuid = UUID(order_id)
         except ValueError:
-            raise HTTPException(status_code=404, detail="Order not found")
+            raise HTTPException(status_code=422, detail="Invalid UUID format")
+
         order = await crud_get_order_by_id(db, order_id, str(current_user.id))
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")

@@ -70,7 +70,7 @@ async def execute_limit_order(session: AsyncSession, order: Order) -> None:
         order.status = OrderStatus.EXECUTED
     else:
         order.status = OrderStatus.PARTIALLY_EXECUTED
-
+    await session.flush()
 
 
 async def execute_market_order(session: AsyncSession, order: Order) -> None:
@@ -150,6 +150,7 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
         order.status = OrderStatus.PARTIALLY_EXECUTED
     else:
         order.status = OrderStatus.CANCELLED
+    await session.flush()
 
     # УБРАНО: await session.commit()
 
@@ -161,10 +162,4 @@ async def execute_trade(
     qty: float,
     price: float,
 ):
-    try:
-        await create_transaction(order1, order2, qty, price, session) 
-
-    except Exception as e:
-        await session.rollback()
-        logger.error(f"Trade execution failed: {str(e)}")
-        raise
+    await create_transaction(order1, order2, qty, price, session)

@@ -29,13 +29,14 @@ async def create_order(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        if isinstance(order, LimitOrderBody):
-            result = await process_limit_order(db, order, str(current_user.id))
-        else:
-            result = await process_market_order(db, order, str(current_user.id))
-            
+        async with db.begin_nested():
+            if isinstance(order, LimitOrderBody):
+                result = await process_limit_order(db, order, str(current_user.id))
+            else:
+                result = await process_market_order(db, order, str(current_user.id))
+        await db.commit()
         return {"success": True, "order_id": str(result.id)}
-        
+
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) 
     except Exception as e:

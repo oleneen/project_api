@@ -167,7 +167,8 @@ async def apply_trade(
                 ).with_for_update()
             )
             if not buyer_rub or buyer_rub.locked < initial_total_locked:
-                raise HTTPException(400, detail="Недостаточно залоченных средств у покупателя")
+                logger.info("Недостаточно залоченных средств у покупателя")
+                return False
 
             seller_rub = await db.scalar(
                 select(Balance).where(
@@ -190,8 +191,9 @@ async def apply_trade(
                 ).with_for_update()
             )
             if not seller_asset or seller_asset.locked < quantity:
-                raise HTTPException(400, detail="Недостаточно залоченных активов у продавца")
-
+                logger.info(f"Недостаточно активов у продавца {seller_id} для сделки — пропускаем")
+                return False
+                
             # Обновляем балансы
             buyer_rub.locked -= initial_total_locked
             buyer_rub.amount -= total_cost
@@ -219,9 +221,7 @@ async def apply_trade(
                     locked=0
                 ))
 
-            # Важно — НЕ коммитим здесь, это сделает вызывающий код.
-
-            return
+            return True
 
         except OperationalError as e:
             if "deadlock detected" in str(e):

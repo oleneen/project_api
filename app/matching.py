@@ -45,15 +45,18 @@ async def execute_limit_order(session: AsyncSession, order: Order) -> None:
 
         initial_locked_price = order.price if order.direction == OrderDirection.BUY else counter_order.price
 
-        await apply_trade(
-            session,
-            buyer_id,
-            seller_id,
-            order.instrument_ticker,
-            trade_price,
-            trade_qty,
-            initial_locked_price
+        success = await apply_trade(
+        session,
+        buyer_id,
+        seller_id,
+        order.instrument_ticker,
+        trade_price,
+        trade_qty,
+        initial_locked_price
         )
+
+        if not success:
+            continue 
 
         await execute_trade(session, order, counter_order, trade_qty, trade_price)
 
@@ -66,11 +69,13 @@ async def execute_limit_order(session: AsyncSession, order: Order) -> None:
         remaining_qty -= trade_qty
 
     order.filled = order.qty - remaining_qty
-    if order.filled == order.qty:
+
+    if order.filled == 0:
+        order.status = OrderStatus.NEW  # ничего не исполнилось, оставляем как есть
+    elif order.filled == order.qty:
         order.status = OrderStatus.EXECUTED
     else:
         order.status = OrderStatus.PARTIALLY_EXECUTED
-
 
 
 async def execute_market_order(session: AsyncSession, order: Order) -> None:
@@ -120,7 +125,7 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
             
             initial_locked_price = counter_order.price if counter_order.price is not None else trade_price
 
-            await apply_trade(
+            success = await apply_trade(
                 session,
                 buyer_id,
                 seller_id,
@@ -129,6 +134,9 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
                 trade_qty,
                 initial_locked_price
             )
+
+            if not success:
+                continue 
         
             await execute_trade(session, order, counter_order, trade_qty, trade_price)
         except Exception as e:
@@ -143,11 +151,11 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
 
         remaining_qty -= trade_qty
 
+
     order.filled = order.qty - remaining_qty
+
     if order.filled == order.qty:
         order.status = OrderStatus.EXECUTED
-    elif order.filled > 0:
-        order.status = OrderStatus.PARTIALLY_EXECUTED
     else:
         order.status = OrderStatus.CANCELLED
 

@@ -115,6 +115,8 @@ async def process_limit_order(
                         f"(требуется: {required_amount}, доступно: {balance})")
             raise ValueError(error_msg)
 
+        await lock_user_balance(db, user_id, balance_ticker, required_amount)
+
         db_order = models.Order(
             user_id=user_id,
             direction=order_data.direction,
@@ -125,8 +127,6 @@ async def process_limit_order(
             status="NEW",
             filled=0
         )
-        
-        await lock_user_balance(db, user_id, balance_ticker, required_amount)
 
         db.add(db_order)
         await db.commit()

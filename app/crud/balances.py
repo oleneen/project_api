@@ -143,87 +143,97 @@ async def apply_trade(
     db: AsyncSession,
     buyer_id: str,
     seller_id: str,
-    ticker: str,         
-    price: int,          
-    quantity: int,       
-    initial_locked_price: int  
+    ticker: str,
+    price: int,
+    quantity: int,
+    initial_locked_price: int
 ):
     retries = 0
+    total_cost = price * quantity
+    if initial_locked_price is None:
+        raise ValueError("initial_locked_price не должен быть None")
+    initial_total_locked = initial_locked_price * quantity
+
     while retries < MAX_RETRIES:
         try:
-            total_cost = price * quantity                        
-            initial_total_locked = initial_locked_price * quantity  
+            # Здесь НЕ открываем новую транзакцию,
+            # предполагается, что вызывающий код уже обернул вызов в транзакцию.
 
-            # Покупатель
-            buyer_stmt = select(models.Balance).where(
-                models.Balance.user_id == buyer_id,
-                models.Balance.instrument_ticker == "RUB"
+            # Получаем балансы с блокировкой в фиксированном порядке
+            buyer_rub = await db.scalar(
+                select(Balance).where(
+                    Balance.user_id == buyer_id,
+                    Balance.instrument_ticker == "RUB"
+                ).with_for_update()
             )
-            buyer_result = await db.execute(buyer_stmt)
-            buyer_balance = buyer_result.scalar_one()
+            if not buyer_rub or buyer_rub.locked < initial_total_locked:
+                raise HTTPException(400, detail="Недостаточно залоченных средств у покупателя")
 
-            if buyer_balance.locked < initial_total_locked:
-                raise ValueError("Недостаточно залоченных средств у покупателя")
-
-            buyer_balance.locked -= initial_total_locked
-            buyer_balance.amount -= total_cost
-
-            buyer_asset_stmt = select(models.Balance).where(
-                models.Balance.user_id == buyer_id,
-                models.Balance.instrument_ticker == ticker
+            seller_rub = await db.scalar(
+                select(Balance).where(
+                    Balance.user_id == seller_id,
+                    Balance.instrument_ticker == "RUB"
+                ).with_for_update()
             )
-            buyer_asset_result = await db.execute(buyer_asset_stmt)
-            buyer_asset_balance = buyer_asset_result.scalar_one_or_none()
 
-            if buyer_asset_balance:
-                buyer_asset_balance.amount += quantity
+            buyer_asset = await db.scalar(
+                select(Balance).where(
+                    Balance.user_id == buyer_id,
+                    Balance.instrument_ticker == ticker
+                ).with_for_update()
+            )
+
+            seller_asset = await db.scalar(
+                select(Balance).where(
+                    Balance.user_id == seller_id,
+                    Balance.instrument_ticker == ticker
+                ).with_for_update()
+            )
+            if not seller_asset or seller_asset.locked < quantity:
+                raise HTTPException(400, detail="Недостаточно залоченных активов у продавца")
+
+            # Обновляем балансы
+            buyer_rub.locked -= initial_total_locked
+            buyer_rub.amount -= total_cost
+
+            if buyer_asset:
+                buyer_asset.amount += quantity
             else:
-                db.add(models.Balance(
+                db.add(Balance(
                     user_id=buyer_id,
                     instrument_ticker=ticker,
                     amount=quantity,
                     locked=0
                 ))
 
-            # Продавец
-            seller_stmt = select(models.Balance).where(
-                models.Balance.user_id == seller_id,
-                models.Balance.instrument_ticker == ticker
-            )
-            seller_result = await db.execute(seller_stmt)
-            seller_balance = seller_result.scalar_one()
+            seller_asset.locked -= quantity
+            seller_asset.amount -= quantity
 
-            if seller_balance.locked < quantity:
-                raise ValueError("Недостаточно залоченных инструментов у продавца")
-
-            seller_balance.locked -= quantity
-            seller_balance.amount -= quantity
-
-            seller_rub_stmt = select(models.Balance).where(
-                models.Balance.user_id == seller_id,
-                models.Balance.instrument_ticker == "RUB"
-            )
-            seller_rub_result = await db.execute(seller_rub_stmt)
-            seller_rub_balance = seller_rub_result.scalar_one_or_none()
-
-            if seller_rub_balance:
-                seller_rub_balance.amount += total_cost
+            if seller_rub:
+                seller_rub.amount += total_cost
             else:
-                db.add(models.Balance(
+                db.add(Balance(
                     user_id=seller_id,
                     instrument_ticker="RUB",
                     amount=total_cost,
                     locked=0
                 ))
 
-            await db.commit()
+            # Важно — НЕ коммитим здесь, это сделает вызывающий код.
+
             return
+
         except OperationalError as e:
             if "deadlock detected" in str(e):
                 retries += 1
-                logger.warning(f"Deadlock detected in apply_trade, retry {retries}")
+                logger.warning(f"Deadlock detected in apply_trade (retry {retries})")
                 await asyncio.sleep(0.1 * retries)
                 continue
-            else:
-                raise
-    raise HTTPException(status_code=500, detail="Сервер перегружен, попробуйте позже")
+            raise
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("Unexpected error during apply_trade")
+            raise HTTPException(500, detail="Ошибка на сервере при применении сделки")
+
+    raise HTTPException(500, detail="Сервер перегружен. Повторите попытку позже.")

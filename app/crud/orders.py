@@ -4,8 +4,8 @@ from .. import models, schemas
 from ..crud.instruments import get_instrument_by_ticker
 from ..crud.balances import get_user_balance, get_available_balance, lock_user_balance, ensure_and_lock_balance
 import logging
-from ..schemas import OrderStatus
-from ..models import OrderDirection,Order
+from ..schemas import OrderStatus,Direction
+from ..models import Order
 from ..matching import execute_limit_order,execute_market_order
 
 logger = logging.getLogger(__name__) 
@@ -29,7 +29,7 @@ async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrder
     if not instrument:
         raise ValueError(f"Инструмент {order_data.ticker} не найден")
 
-    opposite_side = OrderDirection.SELL if order_data.direction == "BUY" else OrderDirection.BUY
+    opposite_side = Direction.SELL if order_data.direction == "BUY" else Direction.BUY
     db_order = models.Order(
         user_id=user_id,
         direction=order_data.direction,

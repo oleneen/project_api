@@ -3,11 +3,11 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from .crud.balances import apply_trade
 from .crud.transactions import create_transaction
-from .models import Order, OrderDirection, OrderStatus,OrderType
+from .schemas import Direction
+from .models import Order,  OrderStatus,OrderType
 
 async def execute_limit_order(session: AsyncSession, order: Order) -> None:
-    opposite_side = OrderDirection.SELL if order.direction == OrderDirection.BUY else OrderDirection.BUY
-
+    opposite_side = Direction.SELL if order.direction == Direction.BUY else Direction.BUY
     stmt = (
         select(Order)
         .where(
@@ -15,7 +15,7 @@ async def execute_limit_order(session: AsyncSession, order: Order) -> None:
                 Order.instrument_ticker == order.instrument_ticker,
                 Order.direction == opposite_side,
                 Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]),
-                Order.price <= order.price if order.direction == OrderDirection.BUY else Order.price >= order.price,
+                Order.price <= order.price if order.direction == Direction.BUY else Order.price >= order.price,
             )
         )
         .order_by(Order.timestamp)
@@ -37,10 +37,9 @@ async def execute_limit_order(session: AsyncSession, order: Order) -> None:
         trade_qty = min(remaining_qty, available_qty)
         trade_price = counter_order.price
 
-        buyer_id = order.user_id if order.direction == OrderDirection.BUY else counter_order.user_id
-        seller_id = counter_order.user_id if order.direction == OrderDirection.BUY else order.user_id
-
-        initial_locked_price = order.price if order.direction == OrderDirection.BUY else counter_order.price
+        buyer_id = order.user_id if order.direction == Direction.BUY else counter_order.user_id
+        seller_id = counter_order.user_id if order.direction == Direction.BUY else order.user_id
+        initial_locked_price = order.price if order.direction == Direction.SELL else counter_order.price
 
         await apply_trade(
             session,
@@ -72,7 +71,7 @@ async def execute_limit_order(session: AsyncSession, order: Order) -> None:
 
 
 async def execute_market_order(session: AsyncSession, order: Order) -> None:
-    opposite_side = OrderDirection.SELL if order.direction == OrderDirection.BUY else OrderDirection.BUY
+    opposite_side = Direction.SELL if order.direction == Direction.BUY else Direction.BUY
 
     stmt = (
         select(Order)
@@ -86,7 +85,7 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
             )
         )
         .order_by(
-            Order.price.asc() if order.direction == OrderDirection.BUY else Order.price.desc(),
+            Order.price.asc() if order.direction == Direction.BUY else Order.price.desc(),
             Order.timestamp.asc()
         )
     )
@@ -110,8 +109,8 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
         trade_qty = min(remaining_qty, available_qty)
         trade_price = counter_order.price
 
-        buyer_id = order.user_id if order.direction == OrderDirection.BUY else counter_order.user_id
-        seller_id = counter_order.user_id if order.direction == OrderDirection.BUY else order.user_id
+        buyer_id = order.user_id if order.direction == Direction.BUY else counter_order.user_id
+        seller_id = counter_order.user_id if order.direction == Direction.BUY else order.user_id
 
 
         try:

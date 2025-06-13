@@ -7,7 +7,10 @@ from .schemas import Direction
 from .models import Order,  OrderStatus,OrderType,OrderDirection
 
 async def execute_limit_order(session: AsyncSession, order: Order) -> None:
+    print(f"Opposite side: {order.direction}")
     opposite_side = Direction.SELL if order.direction == Direction.BUY else Direction.BUY
+    print(f"Opposite side: {order.direction}")
+    print(f"Opposite side: {opposite_side}")
     stmt = (
         select(Order)
         .where(
@@ -37,8 +40,13 @@ async def execute_limit_order(session: AsyncSession, order: Order) -> None:
         trade_qty = min(remaining_qty, available_qty)
         trade_price = counter_order.price
 
-        buyer_id = order.user_id if order.direction == Direction.BUY else counter_order.user_id
-        seller_id = counter_order.user_id if order.direction == Direction.BUY else order.user_id
+        if order.direction == Direction.BUY:
+                buyer_id = order.user_id
+                seller_id = counter_order.user_id
+        else:
+            buyer_id = counter_order.user_id
+            seller_id = order.user_id
+
         initial_locked_price = order.price if order.direction == Direction.SELL else counter_order.price
 
         await apply_trade(
@@ -73,7 +81,8 @@ async def execute_limit_order(session: AsyncSession, order: Order) -> None:
 async def execute_market_order(session: AsyncSession, order: Order) -> None:
     try:
         print(f"Order: {order.type, order.direction}")
-        opposite_side = Direction.SELL if order.direction == OrderDirection.BUY else Direction.BUY
+        opposite_side = OrderDirection.SELL if order.direction == OrderDirection.BUY else OrderDirection.BUY
+        print(f"Opposite side: {order.direction}")
         print(f"Opposite side: {opposite_side}")
         stmt = (
             select(Order)
@@ -101,6 +110,8 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
         remaining_qty = order.qty - order.filled
 
         for counter_order in matching_orders:
+
+            print(f"Order: {counter_order.type, counter_order.direction}")
             if remaining_qty == 0:
                 break
             if counter_order.price is None:
@@ -109,10 +120,13 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
             available_qty = counter_order.qty - counter_order.filled
             trade_qty = min(remaining_qty, available_qty)
             trade_price = counter_order.price
-
-            buyer_id = order.user_id if order.direction == Direction.BUY else counter_order.user_id
-            seller_id = counter_order.user_id if order.direction == Direction.BUY else order.user_id
-
+            print(f"Order: {order.type, order.direction}")
+            if order.direction == OrderDirection.BUY:
+                buyer_id = order.user_id
+                seller_id = counter_order.user_id
+            else:
+                buyer_id = counter_order.user_id
+                seller_id = order.user_id
 
             try:
                 

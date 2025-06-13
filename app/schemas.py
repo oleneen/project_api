@@ -1,4 +1,4 @@
-from pydantic import BaseModel, UUID4, Field, model_validator
+from pydantic import BaseModel, UUID4, StrictInt, Field, model_validator
 from typing import List, Union
 from enum import Enum
 from datetime import datetime
@@ -37,8 +37,10 @@ class MarketOrderBody(BaseModel):
     ticker: str
     qty: int = Field(..., gt=0)
 
-    class Config:
-        from_attributes = True
+    model_config = {
+        'from_attributes': True,
+        'extra': 'forbid'
+    }
 
 
 class LimitOrder(BaseModel):

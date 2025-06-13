@@ -36,3 +36,6 @@ async def create_transaction(
     )
 
     db.add(transaction)
+    await db.flush()
+    await db.commit()
+    await db.refresh(transaction)

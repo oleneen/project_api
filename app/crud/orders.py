@@ -2,7 +2,7 @@ from sqlalchemy import select,and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from .. import models, schemas
 from ..crud.instruments import get_instrument_by_ticker
-from ..crud.balances import get_user_balance, get_available_balance, lock_user_balance
+from ..crud.balances import get_user_balance, get_available_balance, lock_user_balance, ensure_and_lock_balance
 import logging
 from ..schemas import OrderStatus
 from ..models import OrderDirection,Order
@@ -80,7 +80,6 @@ async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrder
         db_order.status = OrderStatus.CANCELLED  # или просто "CANCELED" если без Enum
         await db.commit()
         raise ValueError(f"Недостаточно {balance_ticker} (требуется примерно {required_amount}, доступно {balance})")
-
     
     await lock_user_balance(db, user_id, balance_ticker, required_amount)
     
@@ -109,13 +108,8 @@ async def process_limit_order(
         balance_ticker = "RUB" if order_data.direction == "BUY" else order_data.ticker
         required_amount = order_data.price * order_data.qty if order_data.direction == "BUY" else order_data.qty
 
-        balance = await get_available_balance(db, user_id, balance_ticker)
-        if balance < required_amount:
-            error_msg = (f"Недостаточно {balance_ticker} "
-                        f"(требуется: {required_amount}, доступно: {balance})")
-            raise ValueError(error_msg)
-
-        await lock_user_balance(db, user_id, balance_ticker, required_amount)
+        bal = await ensure_and_lock_balance(db, user_id, balance_ticker, required_amount)
+        await db.refresh(bal)
 
         db_order = models.Order(
             user_id=user_id,
@@ -129,10 +123,10 @@ async def process_limit_order(
         )
 
         db.add(db_order)
-        await db.commit()
-        await db.refresh(db_order)
+        await db.flush()
         await execute_limit_order(db, db_order)
         await db.commit()
+        await db.refresh(db_order)
         return db_order
 
     except Exception as e:

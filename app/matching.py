@@ -1,12 +1,9 @@
 from . import models
 from sqlalchemy import and_, select
-import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from .crud.balances import apply_trade
 from .crud.transactions import create_transaction
 from .models import Order, OrderDirection, OrderStatus,OrderType
-
-logger = logging.getLogger(__name__)
 
 async def execute_limit_order(session: AsyncSession, order: Order) -> None:
     opposite_side = OrderDirection.SELL if order.direction == OrderDirection.BUY else OrderDirection.BUY
@@ -71,6 +68,7 @@ async def execute_limit_order(session: AsyncSession, order: Order) -> None:
     else:
         order.status = OrderStatus.PARTIALLY_EXECUTED
 
+    await session.flush()
 
 
 async def execute_market_order(session: AsyncSession, order: Order) -> None:
@@ -129,7 +127,6 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
                 trade_qty,
                 initial_locked_price
             )
-        
             await execute_trade(session, order, counter_order, trade_qty, trade_price)
         except Exception as e:
             logger.error(f"Ошибка при исполнении сделки: {str(e)}")
@@ -151,7 +148,7 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
     else:
         order.status = OrderStatus.CANCELLED
 
-    # УБРАНО: await session.commit()
+    await session.flush()
 
 
 async def execute_trade(
@@ -161,10 +158,4 @@ async def execute_trade(
     qty: float,
     price: float,
 ):
-    try:
-        await create_transaction(order1, order2, qty, price, session) 
-
-    except Exception as e:
-        await session.rollback()
-        logger.error(f"Trade execution failed: {str(e)}")
-        raise
+    await create_transaction(order1, order2, qty, price, session)

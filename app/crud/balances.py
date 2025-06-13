@@ -30,6 +30,41 @@ async def get_available_balance(db: AsyncSession, user_id: str, ticker: str) -> 
     amount, locked = row
     return amount - locked
 
+async def ensure_and_lock_balance(
+    db: AsyncSession,
+    user_id: str,
+    ticker: str,
+    required_amount: float,
+) -> Balance:
+    """
+    Проверяет, что у пользователя есть свободный баланс >= required_amount,
+    и сразу блокирует эту сумму. Всё — в рамках одного SELECT ... FOR UPDATE.
+    """
+    # 1) Захватываем строку баланса для обновления
+    stmt = (
+        select(Balance)
+        .where(
+            Balance.user_id == user_id,
+            Balance.instrument_ticker == ticker,
+            (Balance.amount - Balance.locked) >= required_amount
+        )
+        .with_for_update(skip_locked=True)
+    )
+    row = await db.execute(stmt)
+    bal: Balance = row.scalar_one_or_none()
+
+    if not bal:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Недостаточно {ticker} (требуется {required_amount})"
+        )
+
+    # 2) Обновляем поле locked и сразу «проталкиваем» UPDATE без коммита
+    bal.locked += required_amount
+    await db.flush()
+
+    return bal
+
 async def lock_user_balance(db: AsyncSession, user_id: str, ticker: str, amount: int):
     retries = 0
     while retries < MAX_RETRIES:
@@ -219,8 +254,8 @@ async def apply_trade(
                     locked=0
                 ))
 
-            # Важно — НЕ коммитим здесь, это сделает вызывающий код.
-
+            await db.flush()
+            await db.commit()
             return
 
         except OperationalError as e:

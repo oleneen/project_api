@@ -2,10 +2,10 @@ from sqlalchemy import select,and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from .. import models, schemas
 from ..crud.instruments import get_instrument_by_ticker
-from ..crud.balances import get_user_balance, get_available_balance, lock_user_balance, ensure_and_lock_balance
+from ..crud.balances import get_user_balance, lock_user_balance, ensure_and_lock_balance
 import logging
-from ..schemas import OrderStatus,Direction
-from ..models import Order
+from ..schemas import OrderStatus
+from ..models import Order,OrderDirection
 from ..matching import execute_limit_order,execute_market_order
 
 logger = logging.getLogger(__name__) 
@@ -25,67 +25,65 @@ async def get_orders_by_user_id(db: AsyncSession, user_id: str):
     return result.scalars().all()
 
 async def process_market_order(db: AsyncSession, order_data: schemas.MarketOrderBody, user_id: str):
-    instrument = await get_instrument_by_ticker(db, order_data.ticker)
-    if not instrument:
-        raise ValueError(f"Инструмент {order_data.ticker} не найден")
-
-    opposite_side = Direction.SELL if order_data.direction == "BUY" else Direction.BUY
-    db_order = models.Order(
-        user_id=user_id,
-        direction=order_data.direction,
-        instrument_ticker=order_data.ticker,
-        qty=order_data.qty,
-        price=None,
-        type="MARKET",
-        status=OrderStatus.NEW,
-        filled=0
-    )
-    db.add(db_order)
-    await db.commit()  
-    await db.refresh(db_order)
-
-    stmt = (
-        select(Order)
-        .where(
-            and_(
-                Order.instrument_ticker == order_data.ticker,
-                Order.direction == opposite_side,
-                Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]),
-                Order.type == "LIMIT"
-            )
-        )
-        .order_by(Order.price.asc() if order_data.direction == "BUY" else Order.price.desc(), Order.timestamp)
-    )
-    result = await db.execute(stmt)
-    matching_orders = result.scalars().all()
-
-    if not matching_orders:
-        db_order.status = OrderStatus.CANCELLED  # или просто "CANCELED" если без Enum
-        await db.commit()
-        raise ValueError("Нет подходящих лимитных ордеров для исполнения рыночной заявки")
-
-    # Новая проверка: суммарное доступное количество лимитных ордеров
-    total_available_qty = sum(o.qty - o.filled for o in matching_orders)
-    if total_available_qty < order_data.qty:
-        db_order.status = OrderStatus.CANCELLED  # или просто "CANCELED" если без Enum
-        await db.commit()
-        raise ValueError(f"Недостаточно встречных лимитных ордеров: доступно {total_available_qty}, требуется {order_data.qty}")
-
-    balance_ticker = "RUB" if order_data.direction == "BUY" else order_data.ticker
-    balance = await get_user_balance(db, user_id, balance_ticker)
-
-    max_price = max(o.price for o in matching_orders) if order_data.direction == "BUY" else 0
-    required_amount = order_data.qty * max_price if order_data.direction == "BUY" else order_data.qty
-    if balance < required_amount:
-        db_order.status = OrderStatus.CANCELLED  # или просто "CANCELED" если без Enum
-        await db.commit()
-        raise ValueError(f"Недостаточно {balance_ticker} (требуется примерно {required_amount}, доступно {balance})")
-    
-    await lock_user_balance(db, user_id, balance_ticker, required_amount)
-    
     try:
-        await execute_market_order(db, db_order)
+        instrument = await get_instrument_by_ticker(db, order_data.ticker)
+        if not instrument:
+            raise ValueError(f"Инструмент {order_data.ticker} не найден")
 
+        opposite_side = OrderDirection.SELL if order_data.direction == "BUY" else OrderDirection.BUY
+        db_order = models.Order(
+            user_id=user_id,
+            direction=order_data.direction,
+            instrument_ticker=order_data.ticker,
+            qty=order_data.qty,
+            price=None,
+            type="MARKET",
+            status=OrderStatus.NEW,
+            filled=0
+        )
+        db.add(db_order)
+        await db.commit()  
+        await db.refresh(db_order)
+
+        stmt = (
+            select(Order)
+            .where(
+                and_(
+                    Order.instrument_ticker == order_data.ticker,
+                    Order.direction == opposite_side,
+                    Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]),
+                    Order.type == "LIMIT"
+                )
+            )
+            .order_by(Order.price.asc() if order_data.direction == "BUY" else Order.price.desc(), Order.timestamp)
+        )
+        result = await db.execute(stmt)
+        matching_orders = result.scalars().all()
+        if not matching_orders:
+            db_order.status = OrderStatus.CANCELLED  # или просто "CANCELED" если без Enum
+            await db.commit()
+            raise ValueError("Нет подходящих лимитных ордеров для исполнения рыночной заявки")
+
+        # Новая проверка: суммарное доступное количество лимитных ордеров
+        total_available_qty = sum(o.qty - o.filled for o in matching_orders)
+        if total_available_qty < order_data.qty:
+            db_order.status = OrderStatus.CANCELLED  # или просто "CANCELED" если без Enum
+            await db.commit()
+            raise ValueError(f"Недостаточно встречных лимитных ордеров: доступно {total_available_qty}, требуется {order_data.qty}")
+
+        balance_ticker = "RUB" if order_data.direction == "BUY" else order_data.ticker
+        balance = await get_user_balance(db, user_id, balance_ticker)
+
+        max_price = max(o.price for o in matching_orders) if order_data.direction == "BUY" else 0
+        required_amount = order_data.qty * max_price if order_data.direction == "BUY" else order_data.qty
+        if balance < required_amount:
+            db_order.status = OrderStatus.CANCELLED  # или просто "CANCELED" если без Enum
+            await db.commit()
+            raise ValueError(f"Недостаточно {balance_ticker} (требуется примерно {required_amount}, доступно {balance})")
+        
+        await lock_user_balance(db, user_id, balance_ticker, required_amount)
+    
+        await execute_market_order(db, db_order)
         await db.commit()  
         return db_order
 

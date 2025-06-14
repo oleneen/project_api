@@ -188,7 +188,7 @@ async def apply_trade(
     if initial_locked_price is None:
         raise ValueError("initial_locked_price не должен быть None")
     initial_total_locked = initial_locked_price * quantity
-
+    print("Заблокированная часть 2 полная сумма:", initial_locked_price)
     while retries < MAX_RETRIES:
         try:
             # Здесь НЕ открываем новую транзакцию,

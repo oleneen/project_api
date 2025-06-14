@@ -21,7 +21,14 @@ async def execute_limit_order(session: AsyncSession, order: Order) -> None:
                 Order.price <= order.price if order.direction == Direction.BUY else Order.price >= order.price,
             )
         )
-        .order_by(Order.timestamp)
+        .order_by(
+            # Для BUY: сначала самые дешевые ордера (цена по возрастанию)
+            Order.price.asc() if order.direction == Direction.BUY else 
+            # Для SELL: сначала самые дорогие ордера (цена по убыванию)
+            Order.price.desc(),
+            # Затем по времени для одинаковых цен
+            Order.timestamp
+        )
     )
 
     result = await session.execute(stmt)
@@ -47,8 +54,9 @@ async def execute_limit_order(session: AsyncSession, order: Order) -> None:
             buyer_id = counter_order.user_id
             seller_id = order.user_id
 
-        initial_locked_price = order.price if order.direction == Direction.SELL else counter_order.price
-
+        initial_locked_price = order.price if order.direction == Direction.BUY else counter_order.price
+        print("Заблокированная часть:", initial_locked_price)
+        print("Направиление ордера:", order.direction)
         await apply_trade(
             session,
             buyer_id,
@@ -96,7 +104,11 @@ async def execute_market_order(session: AsyncSession, order: Order) -> None:
                 )
             )
             .order_by(
-                Order.price.asc() if order.direction == Direction.BUY else Order.price.desc(),
+                # Для MARKET BUY: берем самые дешевые предложения (цена по возрастанию)
+                Order.price.asc() if order.direction == OrderDirection.BUY else 
+                # Для MARKET SELL: берем самые дорогие предложения (цена по убыванию)
+                Order.price.desc(),
+                # Затем по времени для одинаковых цен
                 Order.timestamp.asc()
             )
         )

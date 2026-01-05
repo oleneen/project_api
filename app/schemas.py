@@ -1,5 +1,5 @@
 from pydantic import BaseModel, UUID4, StrictInt, Field, model_validator
-from typing import List, Union
+from typing import Any, Dict, List, Union
 from enum import Enum
 from datetime import datetime
 
@@ -167,3 +167,21 @@ class ValidationError:
 
 class HTTPValidationError:
     detail: List[ValidationError]
+
+#Схемы для формирования отчетов
+class ReportRequest(BaseModel):
+    year: int = Field(..., ge=2020, le=2100)
+    month: int = Field(..., ge=1, le=12)
+    
+class ReportInfo(BaseModel):
+    id: UUID4
+    user_id: UUID4
+    year: int
+    month: int
+    file_url: str
+    generated_at: datetime
+    trade_count: int = Field(default=0) 
+    status: str = Field(default="completed")
+    
+    class Config:
+        from_attributes = True

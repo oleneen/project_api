@@ -8,3 +8,4 @@ venv/
 _pycache__/
 *.py[cod]
 .idea/
+*.pyc

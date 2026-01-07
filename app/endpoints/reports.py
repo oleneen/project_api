@@ -1,15 +1,12 @@
-from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timedelta
 import logging
+from app.models import User
 
 from .. import schemas
 from ..database import get_db
 from ..dependencies.user import get_authenticated_user
-from ..models import User, Report
 from ..crud.reports import upload_report_to_storage, get_user_trades_for_month
-from sqlalchemy import select
 
 router = APIRouter(tags=["reports"])
 logger = logging.getLogger(__name__)

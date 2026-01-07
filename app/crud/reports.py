@@ -6,10 +6,9 @@ import io
 from datetime import datetime, date
 from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_
 from fastapi import HTTPException
 import logging
-import uuid
 
 from .. import models
 

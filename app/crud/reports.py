@@ -145,62 +145,41 @@ async def upload_report_to_storage(
     month: int
 ) -> Dict[str, Any]:
 
-    try:
-        csv_content = await generate_csv_report(db, user_id, year, month)
-        
-        trades = await get_user_trades_for_month(db, user_id, year, month)
-        
-        s3 = get_s3_client()
-        bucket = os.getenv('YC_OBJ_STORAGE_BUCKET', 'trading-reports')
-    
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        file_name = f"reports/{user_id}/{year}_{month:02d}/report_{timestamp}.csv"
-        
-        def sync_upload():
-            s3.put_object(
-                Bucket=bucket,
-                Key=file_name,
-                Body=csv_content.encode('utf-8'),
-                ContentType='text/csv',
-                Metadata={
-                    'user_id': user_id,
-                    'year': str(year),
-                    'month': str(month),
-                    'trade_count': str(len(trades)),
-                    'generated_at': datetime.now().isoformat()
-                }
-            )
-            
-            url = s3.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': bucket, 'Key': file_name},
-                ExpiresIn=3600
-            )
-            
-            return url
-        
-        url = await asyncio.get_event_loop().run_in_executor(None, sync_upload)
-        
-        report_info = {
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "year": year,
-            "month": month,
-            "file_url": url,
-            "file_path": file_name,
-            "generated_at": datetime.now(),
-            "trade_count": len(trades),
-            "status": "completed"
-        }
-        
-        logger.info(f"Report generated for user {user_id}: {len(trades)} trades")
-        return report_info
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error uploading report: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Ошибка загрузки отчета: {str(e)}"
+    csv_content = await generate_csv_report(db, user_id, year, month)
+    trades = await get_user_trades_for_month(db, user_id, year, month)
+
+    s3 = get_s3_client()
+    bucket = os.getenv('YC_OBJ_STORAGE_BUCKET')
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    file_name = f"reports/{user_id}/{year}_{month:02d}/report_{timestamp}.csv"
+
+    def sync_upload():
+        s3.put_object(
+            Bucket=bucket,
+            Key=file_name,
+            Body=csv_content.encode("utf-8"),
+            ContentType="text/csv",
+            Metadata={
+                "user_id": user_id,
+                "year": str(year),
+                "month": str(month),
+                "trade_count": str(len(trades)),
+            }
         )
+
+        return s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": file_name},
+            ExpiresIn=3600
+        )
+
+    url = await asyncio.get_event_loop().run_in_executor(None, sync_upload)
+
+    return {
+        "file_url": url,
+        "file_path": file_name,
+        "trade_count": len(trades),
+        "status": "completed",
+        "generated_at": datetime.utcnow(),
+    }

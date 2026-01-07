@@ -73,35 +73,3 @@ class Transaction(Base):
 
     buy_order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
     sell_order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
-
-class Report(Base):
-    __tablename__ = "reports"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    year = Column(Integer, nullable=False)
-    month = Column(Integer, nullable=False)
-    file_path = Column(String, nullable=False)  # Путь в Object Storage
-    file_url = Column(String)  # Последняя временная ссылка
-    trade_count = Column(Integer, default=0)  # Количество сделок
-    generated_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
-    status = Column(String, default="completed")  # completed, failed
-    expires_at = Column(TIMESTAMP(timezone=True))
-    
-    user = relationship("User")
-    
-    __table_args__ = (
-        UniqueConstraint('user_id', 'year', 'month', name='uix_user_year_month'),
-    )
-    
-    def get_report_info(self) -> dict:
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "year": self.year,
-            "month": self.month,
-            "file_url": self.file_url,
-            "trade_count": self.trade_count,
-            "generated_at": self.generated_at,
-            "status": self.status
-        }

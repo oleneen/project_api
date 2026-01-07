@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 async def create_monthly_report(
     report_request: schemas.ReportRequest,
     current_user: User = Depends(get_authenticated_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Создает отчет по сделкам пользователя за указанный месяц.
@@ -33,75 +33,32 @@ async def create_monthly_report(
     - total_amount: общая сумма
     - executed_at: время исполнения
     """
-    try:
+    trades = await get_user_trades_for_month(
+        db,
+        str(current_user.id),
+        report_request.year,
+        report_request.month,
+    )
 
-        result = await db.execute(
-            select(Report).where(
-                Report.user_id == current_user.id,
-                Report.year == report_request.year,
-                Report.month == report_request.month
-            )
-        )
-        existing_report = result.scalar_one_or_none()
-
-        if existing_report:
-            return schemas.ReportInfo(
-                id=existing_report.id,
-                user_id=existing_report.user_id,
-                year=existing_report.year,
-                month=existing_report.month,
-                file_url=existing_report.file_url,
-                trade_count=existing_report.trade_count,
-                generated_at=existing_report.generated_at,
-                status=existing_report.status
-        )
-
-        trades = await get_user_trades_for_month(
-            db, str(current_user.id), report_request.year, report_request.month
-        )
-        
-        if not trades:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Нет сделок за {report_request.month:02d}/{report_request.year}"
-            )
-        
-        report_info = await upload_report_to_storage(
-            db, str(current_user.id), report_request.year, report_request.month
-        )
-        
-        db_report = Report(
-            id=report_info["id"],
-            user_id=current_user.id,
-            year=report_request.year,
-            month=report_request.month,
-            file_path=report_info["file_path"],
-            file_url=report_info["file_url"],
-            trade_count=report_info["trade_count"],
-            status=report_info["status"],
-            expires_at=datetime.now() + timedelta(hours=1)
-        )
-        
-        db.add(db_report)
-        await db.commit()
-        await db.refresh(db_report)
-
-        return schemas.ReportInfo(
-            id=db_report.id,
-            user_id=db_report.user_id,
-            year=db_report.year,
-            month=db_report.month,
-            file_url=db_report.file_url,
-            trade_count=db_report.trade_count,
-            generated_at=db_report.generated_at,
-            status=db_report.status
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating report: {e}", exc_info=True)
+    if not trades:
         raise HTTPException(
-            status_code=500,
-            detail=f"Ошибка создания отчета: {str(e)}"
+            status_code=404,
+            detail=f"Нет сделок за {report_request.month:02d}/{report_request.year}",
         )
+
+    report_info = await upload_report_to_storage(
+        db,
+        str(current_user.id),
+        report_request.year,
+        report_request.month,
+    )
+
+    return schemas.ReportInfo(
+        user_id=current_user.id,
+        year=report_request.year,
+        month=report_request.month,
+        file_url=report_info["file_url"],
+        trade_count=report_info["trade_count"],
+        generated_at=report_info["generated_at"],
+        status=report_info["status"],
+    )

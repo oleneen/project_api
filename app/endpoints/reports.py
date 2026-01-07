@@ -1,4 +1,3 @@
-import os
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +9,7 @@ from ..database import get_db
 from ..dependencies.user import get_authenticated_user
 from ..models import User, Report
 from ..crud.reports import upload_report_to_storage, get_user_trades_for_month
+from sqlalchemy import select
 
 router = APIRouter(tags=["reports"])
 logger = logging.getLogger(__name__)
@@ -34,6 +34,28 @@ async def create_monthly_report(
     - executed_at: время исполнения
     """
     try:
+
+        result = await db.execute(
+            select(Report).where(
+                Report.user_id == current_user.id,
+                Report.year == report_request.year,
+                Report.month == report_request.month
+            )
+        )
+        existing_report = result.scalar_one_or_none()
+
+        if existing_report:
+            return schemas.ReportInfo(
+                id=existing_report.id,
+                user_id=existing_report.user_id,
+                year=existing_report.year,
+                month=existing_report.month,
+                file_url=existing_report.file_url,
+                trade_count=existing_report.trade_count,
+                generated_at=existing_report.generated_at,
+                status=existing_report.status
+        )
+
         trades = await get_user_trades_for_month(
             db, str(current_user.id), report_request.year, report_request.month
         )

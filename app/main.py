@@ -1,3 +1,8 @@
+from .endpoints.reports import router as reports_router
+from .endpoints.order import router as order_router
+from .endpoints.balance import router as balance_router
+from .endpoints.admin import router as admin_router
+from .endpoints.public import router as public_router
 import json
 import logging
 import sys
@@ -7,17 +12,37 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException
 
-from .endpoints.public import router as public_router
-from .endpoints.admin import router as admin_router
-from .endpoints.balance import router as balance_router
-from .endpoints.order import router as order_router
-from .endpoints.reports import router as reports_router
+logging.getLogger("uvicorn").handlers.clear()
+logging.getLogger("uvicorn.access").handlers.clear()
+logging.getLogger("uvicorn.error").handlers.clear()
+
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
+logging.getLogger("uvicorn").propagate = False
+logging.getLogger("uvicorn.access").propagate = False
+logging.getLogger("uvicorn.access").disabled = True
+logging.getLogger("uvicorn.error").propagate = False
+
+for name in (
+    "sqlalchemy",
+    "sqlalchemy.engine",
+    "sqlalchemy.pool",
+    "sqlalchemy.dialects",
+):
+    sa_logger = logging.getLogger(name)
+    sa_logger.setLevel(logging.WARNING)
+    sa_logger.handlers.clear()
+    sa_logger.propagate = False
+
+logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.WARNING)
+logging.getLogger("sqlalchemy.engine.Engine").propagate = False
+logging.getLogger("sqlalchemy.engine.Engine").handlers.clear()
 
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         log = {
-            "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S.%fZ"),
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)),
             "level": record.levelname,
             "message": record.getMessage(),
             "logger": record.name,
@@ -41,15 +66,17 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log, ensure_ascii=False)
 
 
-logging.getLogger("uvicorn.access").disabled = True
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.INFO)
+
+logging.captureWarnings(True)
 
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(JsonFormatter())
 
 root_logger.handlers.clear()
-root_logger.addHandler(handler)
+if not root_logger.handlers:
+    root_logger.addHandler(handler)
 
 
 app = FastAPI(debug=True)
